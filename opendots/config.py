@@ -37,6 +37,7 @@ class Config:
     max_planning_rounds: int = 8
     max_repair_attempts: int = 2
     source_workers: int = 4
+    plugins: tuple[str, ...] = ()
 
 
 def validate_config(raw):
@@ -46,6 +47,8 @@ def validate_config(raw):
                          ("max_planning_rounds",1),("max_repair_attempts",0)):
         if key in raw and (type(raw[key]) is not int or raw[key] < minimum):
             raise ValueError(f"config.{key} must be an integer >= {minimum}")
+    if not isinstance(raw.get("plugins",[]),list) or any(not isinstance(v,str) or not v for v in raw.get("plugins",[])):
+        raise ValueError("config.plugins must be an array of installed extension names")
     for index, target in enumerate(raw["targets"]):
         prefix = f"targets[{index}]"
         if not isinstance(target, dict):
@@ -171,4 +174,4 @@ def load_config(path: Path) -> Config:
     return Config(tuple(targets), database,
                   workers, backend, agent_timeout,
                   raw.get("codex_command", "codex"), raw.get("model"), tuple(schedules),
-                  tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)), int(raw.get("max_repair_attempts", 2)), int(raw.get("source_workers", 4)))
+                  tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)), int(raw.get("max_repair_attempts", 2)), int(raw.get("source_workers", 4)), tuple(raw.get("plugins", [])))

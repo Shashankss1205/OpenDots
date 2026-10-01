@@ -256,3 +256,15 @@ class AuditFixTests(unittest.TestCase):
                 self.assertIsNone(session.submit('/quit'))
                 self.assertEqual(session.client.request('/api/health')['status'],'ok')
             finally:server.shutdown();server.server_close();thread.join()
+
+    def test_extensions_are_explicitly_enabled(self):
+        from unittest.mock import patch
+        from opendots.extensions import ExtensionAPI,load_extensions
+        calls=[]
+        class Entry:
+            name='fixture'
+            def load(self):return lambda api:calls.append(api.version)
+        with patch('opendots.extensions.entry_points',return_value=[Entry()]):
+            api=ExtensionAPI(None,None,None);load_extensions([],api);self.assertEqual(calls,[])
+            load_extensions(['fixture'],api);self.assertEqual(calls,[1])
+            with self.assertRaises(ValueError):load_extensions(['missing'],api)
