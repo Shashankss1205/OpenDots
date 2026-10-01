@@ -32,12 +32,19 @@ def normalize_github(kind, payload, delivery_id, repo=None):
         event_type = f"github.{names.get(kind, kind)}.{action}"
     repository = repo or payload.get("repository", {}).get("full_name")
     entity = payload.get("issue") or payload.get("pull_request") or payload.get("discussion") or payload
+    comment = payload.get("comment") or payload.get("review")
+    content = comment if isinstance(comment, dict) else entity
     labels = entity.get("labels", [])
     label_names = [label.get("name", "") if isinstance(label, dict) else str(label) for label in labels]
     severity = "critical" if any("critical" in name.lower() for name in label_names) else "normal"
     return {"id": "github:" + str(delivery_id), "type": event_type, "source": "github",
-            "payload": {"repo": repository, "title": entity.get("title", event_type), "body": entity.get("body", ""),
-                        "number": entity.get("number"), "url": entity.get("html_url"), "severity": severity,
+            "payload": {"repo": repository, "title": entity.get("title", event_type), "body": content.get("body", ""),
+                        "action": action, "actor": payload.get("sender", {}).get("login"),
+                        "comment_id": content.get("id") if comment else None,
+                        "issue_body": entity.get("body", "") if comment else None,
+                        "ref": payload.get("ref"), "before": payload.get("before"),
+                        "after": payload.get("after"), "commits": payload.get("commits", []),
+                        "number": entity.get("number"), "url": content.get("html_url") or entity.get("html_url"), "severity": severity,
                         "labels": label_names}}
 
 
