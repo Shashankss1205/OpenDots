@@ -20,6 +20,7 @@ class OnboardingTests(unittest.TestCase):
             self.assertEqual(config.backend,'claude')
             self.assertEqual(config.targets[0].objective,'My actual objective')
             self.assertEqual(config.targets[0].write_paths,())
+            self.assertEqual(config.targets[0].relevance['mode'],'model')
             self.assertFalse(config.targets[0].recipes)
             self.assertEqual(config.schedules[0]['interval_seconds'],300)
             self.assertFalse((path.parent/'workspaces').exists())

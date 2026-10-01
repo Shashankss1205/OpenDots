@@ -37,6 +37,8 @@ A tool policy is `auto`, `ask`/`approval`, `draft`, or `deny`. Unspecified tools
 
 ## Event ingestion, attention and routing
 
+See [Events and listeners](EVENTS.md) for producer setup and both interface workflows. Every new event stores per-target routing decisions, including unmatched targets. Model relevance is enabled by normal init and opt-in for older configs via target `relevance.mode`. The assessment is separate from priority, consumes a model-call reservation, and gates workspace creation/actions. High-confidence irrelevant tasks are `ignored`; uncertain/error outcomes are `blocked`. `event_decisions` stores goal, label, confidence, reason and provenance. Event browsing is cursor-paginated via GET `/api/events`; GET `/api/events/ID` gives the full envelope; GET `/api/listeners` reports configured inputs. Legacy events have no invented assessments.
+
 The normalized envelope contains `id`, `type`, `source`, `payload`, and optional `target_id` and `priority`. JSON input is bounded to 256,000 bytes; event IDs and types are bounded to 256 characters. Subscriptions match event types/globs with source and repository filters. Explicit targeting still follows the engine's validation and routing rules.
 
 Delivery IDs are durable. Repeating the same ID with the same canonical body returns a duplicate result; reusing it with a different body is rejected. Each event/target work pair is unique. Audit records also capture events that cause no work.

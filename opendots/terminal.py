@@ -14,6 +14,12 @@ HELP = '''/agents                 List agents and their status
 /approve ID             Request approval confirmation after review
 /reject ID              Reject a reviewed action
 /activity               Recent activity for the selected agent
+/listeners              Configured sources, schedules and subscriptions
+/events [TEXT]          Browse received events, including ignored ones
+/events-next            Older events for the same search
+/event ID               Full event payload and goal-relevance decisions
+/emit JSON              Create an event with an explicit JSON envelope
+/connect                How to configure HTTP, JSONL, GitHub and timers
 /status                 Connector health, queue age and planning usage
 /history [TEXT]         Search task history
 /next                   Show the next history page
@@ -40,7 +46,7 @@ def task_line(work):
 def activity_line(entry):
     detail=entry['detail'];kind=entry['kind'].replace('_',' ')
     result=detail.get('result',{}) if isinstance(detail,dict) else {}
-    text=detail.get('summary') or detail.get('error') or detail.get('tool') or ''
+    text=detail.get('summary') or detail.get('error') or detail.get('tool') or detail.get('reason') or ''
     if isinstance(result,dict):
         if 'exit_code' in result:
             text=f"{result.get('name','Check')}: {'passed' if result['exit_code']==0 else 'failed'}"
@@ -83,6 +89,8 @@ class Session:
         self.last_audit=0
         self.history_query=''
         self.history_before=None
+        self.events_before=None
+        self.events_query=''
 
     def refresh(self):
         state=self.client.request('/api/state')
@@ -108,6 +116,55 @@ class Session:
         command,_,argument=text.partition(' ')
         if command in {'/quit','/exit'}: return None
         if command in {'/help','?'}: return HELP
+        if command == '/connect':
+            return ("Create a message: /send input.changed Your actual information\n"
+                "Or /emit {\"type\":\"input.changed\",\"source\":\"local\",\"payload\":{\"title\":\"Your information\"}}\n"
+                "HTTP: POST /api/events with JSON and X-OpenDots-Request: dashboard.\n"
+                "JSONL: configure sources [{id,kind:jsonl,path,interval_seconds}], then append one JSON event per line.\n"
+                "GitHub: configure a github_poll source with repo owner/name and matching github subscriptions.\n"
+                "Webhooks: /api/webhooks/github needs a signing secret and an external receiver for localhost.\n"
+                "Timers: configure schedules and a timer.heartbeat subscription. Restart after config edits.\n"
+                "Use /listeners to see exact rules. Guide: https://github.com/Shashankss1205/OpenDots/blob/main/docs/EVENTS.md")
+        if command == '/listeners':
+            data=self.client.request('/api/listeners')
+            lines=['LISTENERS (configuration in effect; restart after edits)']
+            for source in data['sources']:
+                health=source.get('health',{})
+                status=health.get('last_error') or ('polled successfully' if health.get('last_success') else 'not polled yet')
+                lines.append(f"{source['id']} | {source['kind']} | {source.get('path') or source.get('repo','')} | {source.get('interval_seconds',5)}s | {status}")
+            if not data['sources']: lines.append('No polling sources configured.')
+            for schedule in data['schedules']:
+                lines.append(f"Timer {schedule['id']}: {schedule['type']} every {schedule['interval_seconds']}s -> {schedule['target_id']}")
+            for target in data['targets']:
+                lines.append(f"{target['id']} | Goal: {target['goal']} | Relevance: {json.dumps(target['relevance'])}")
+                for rule in target['subscriptions']:
+                    lines.append(f"  types={rule['types']} sources={rule.get('sources') or 'any'} repos={rule.get('repos') or 'any'}")
+            lines.append('Local HTTP input: /api/events. GitHub webhook: '+('secret configured' if data['inputs'][1]['configured'] else 'secret not configured'))
+            return '\n'.join(lines)
+        if command in {'/events','/events-next'}:
+            if command == '/events': self.events_query=argument;self.events_before=None
+            elif self.events_before is None: return 'No more events. Use /events to refresh.'
+            path='/api/events?q='+quote(self.events_query,safe='')
+            if self.events_before is not None:path+='&before='+str(self.events_before)
+            data=self.client.request(path);self.events_before=data['next_before']
+            lines=[]
+            for event in data['events']:
+                lines.append(f"{event['id']} | {event['type']} | source={event['source']} | {event['title']}")
+                for decision in event['decisions']:
+                    score=decision.get('confidence')
+                    confidence=f"{score:.0%} estimated confidence in {decision.get('decision', decision['status'])}" if score is not None else 'confidence: not assessed'
+                    lines.append(f"  {decision['target_id']}: {decision['status']} | {confidence} | {decision.get('work_status') or 'no work'} | {decision['reason']}")
+                if not event['decisions']:lines.append('  No recorded target decision (historical event).')
+            if self.events_before:lines.append('Use /events-next for older events.')
+            return '\n'.join(lines) or 'No events received. /send TYPE MESSAGE or /connect to configure an input.'
+        if command == '/event':
+            if not argument:raise ValueError('Usage: /event ID')
+            return json.dumps(self.client.request('/api/events/'+quote(argument,safe='')),indent=2)
+        if command == '/emit':
+            try: event=json.loads(argument)
+            except ValueError: raise ValueError('Usage: /emit {"type":"input.changed","source":"local","payload":{"title":"Your information"}}') from None
+            return json.dumps(self.client.request('/api/events',event),indent=2)+'\nUse /events to see routing and relevance.'
+
         self.refresh()
         if command=='/agents':
             return '\n'.join(f"{'>' if t['id']==self.selected else ' '} {t['id']} | {'Paused' if t['state'].get('paused') else 'Active'} | {t.get('objective','')}" for t in self.state['targets']) or 'No agents configured.'
@@ -192,7 +249,7 @@ def run(url='http://127.0.0.1:8765'):
     session=Session(Client(url))
     def screen(window):
         curses.curs_set(1);window.timeout(150);window.keypad(True)
-        transcript=['OpenDots  •  Persistent agents, at your prompt.','/agents  /reviews  /activity  /help','Closing this view leaves the runtime running.']
+        transcript=['OpenDots  •  Persistent agents, at your prompt.','/agents  /listeners  /events  /reviews  /help','Closing this view leaves the runtime running.']
         draft='';cursor=0;history=[];history_index=0;scroll=0;last_refresh=0;connection='Connecting';seen={};initialized=False
         accent=curses.A_BOLD
         if curses.has_colors():
@@ -209,10 +266,10 @@ def run(url='http://127.0.0.1:8765'):
                     state=session.refresh();connection='Connected'
                     recent=state['work'] if initialized else state['work'][:8]
                     for work in reversed(recent):
-                        if seen.get(work['id'])!=work['status'] and work['status'] in {'waiting_approval','completed','failed','blocked','interrupted'}:
+                        if seen.get(work['id'])!=work['status'] and work['status'] in {'waiting_approval','completed','failed','blocked','interrupted','ignored'}:
                             append(task_line(work))
                     for entry in reversed(state['audit']):
-                        if initialized and entry['id']>session.last_audit and entry['target_id']==session.selected and entry['kind'] in {'work_started','action_completed','action_failed','proposal_accepted'}:
+                        if initialized and entry['id']>session.last_audit and entry['target_id']==session.selected and entry['kind'] in {'work_started','action_completed','action_failed','proposal_accepted','event_relevance_assessed'}:
                             append(activity_line(entry))
                     session.last_audit=max((a['id'] for a in state['audit']),default=0)
                     seen={w['id']:w['status'] for w in state['work']};initialized=True

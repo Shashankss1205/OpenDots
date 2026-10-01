@@ -22,6 +22,7 @@ class Target:
     success_conditions: tuple[dict, ...] = ()
     protected_paths: tuple[str, ...] = ("check.py", "tests/**", ".github/**")
     model_calls_per_day: int = 100
+    relevance: dict = field(default_factory=lambda: {"mode": "off"})
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,12 @@ def validate_config(raw):
         for key in ("id","name","objective","workspace"):
             if not isinstance(target.get(key), str) or not target[key]:
                 raise ValueError(f"{prefix}.{key} must be a nonempty string")
+        relevance = target.get("relevance", {"mode": "off"})
+        if not isinstance(relevance, dict) or relevance.get("mode", "off") not in {"off", "model"}:
+            raise ValueError(f"{prefix}.relevance.mode must be off or model")
+        confidence = relevance.get("minimum_confidence", 0.7)
+        if type(confidence) not in (int, float) or not 0 <= confidence <= 1:
+            raise ValueError(f"{prefix}.relevance.minimum_confidence must be between 0 and 1")
         for key in ("policy","checks","recipes","desired_state"):
             if not isinstance(target.get(key, {}), dict):
                 raise ValueError(f"{prefix}.{key} must be an object")
@@ -167,7 +174,7 @@ def load_config(path: Path) -> Config:
                               item.get("checks", {}), int(item.get("minimum_priority", 20)),
                               item.get("desired_state", {}), tuple(item.get("skills", [])), item.get("agent"),
                               tuple(item.get("write_paths", [])), tuple(required_checks), tuple(item.get("success_conditions", [])),
-                              tuple(item.get("protected_paths", ["check.py", "tests/**", ".github/**"])), int(item.get("model_calls_per_day",100))))
+                              tuple(item.get("protected_paths", ["check.py", "tests/**", ".github/**"])), int(item.get("model_calls_per_day",100)), item.get("relevance", {"mode": "off"})))
     workers = int(raw.get("workers", 4))
     if workers < 1:
         raise ValueError("workers must be positive")

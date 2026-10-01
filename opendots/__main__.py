@@ -38,6 +38,17 @@ def main():
     drain = commands.add_parser("drain", help="Process the queue until idle or awaiting approval")
     drain.add_argument("--timeout", type=int, default=300)
     commands.add_parser("status")
+    commands.add_parser("listeners", help="List active input configuration and subscriptions")
+    events = commands.add_parser("events", help="Browse received events and relevance decisions")
+    events.add_argument("--before", type=int)
+    events.add_argument("--query", default="")
+    events.add_argument("--target")
+    event = commands.add_parser("event", help="Create and ingest a JSON event")
+    event.add_argument("--type", required=True)
+    event.add_argument("--source", default="local")
+    event.add_argument("--target")
+    event.add_argument("--id")
+    event.add_argument("--payload", required=True, help="JSON object with your actual event information")
     proposal = commands.add_parser("proposal", help="Inspect a completed local proposal")
     proposal.add_argument("work_id", type=int)
     accept = commands.add_parser("accept", help="Use a reviewed proposal as the base of future work")
@@ -99,6 +110,15 @@ def main():
         engine = Engine(config)
         if args.command == "serve":
             serve(engine, args.host, args.port)
+        elif args.command == "listeners":
+            print(json.dumps(engine.listeners(), indent=2))
+        elif args.command == "events":
+            print(json.dumps(engine.store.events(args.before, args.query, args.target), indent=2))
+        elif args.command == "event":
+            event = {"type": args.type, "source": args.source, "payload": json.loads(args.payload)}
+            if args.target: event["target_id"] = args.target
+            if args.id: event["id"] = args.id
+            print(json.dumps(engine.ingest(event), indent=2))
         elif args.command == "ingest":
             events = json.loads(args.file.read_text())
             if not isinstance(events, list):

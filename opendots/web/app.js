@@ -10,6 +10,8 @@ async function request(path, body) {
 function showError(error) {$('error').textContent = error.message; $('error').hidden = false;}
 function render(data) {
   current = data;
+  renderListeners(data.listeners);
+  if (eventLive) renderEventStream(data.event_stream);
   $('connection').textContent = 'Connected to local workers';
   $('backend').textContent = data.backend === 'demo' ? 'DEMO · deterministic recipes' :
     data.backend === 'codex' ? 'CODEX · CLI planning backend' : `${data.backend} · registered planning provider`;
@@ -51,7 +53,7 @@ function render(data) {
       ['Signal','Diagnose','Policy','Verify','Retain'].forEach((name,index)=>{const unchecked=index===3 && work.status==='completed' && !checks.length;const li=el('li',unchecked?'':index<stage?'done':index===stage?'active':'');li.append(el('span','step-number',unchecked?'—':index<stage?'✓':String(index+1)),el('span',null,unchecked?'No check':name));steps.append(li);});card.append(steps);
       let summary=work.error||work.plan?.summary||work.summary;
       if(work.status==='queued') summary='Queued behind earlier work for this target. Other targets can continue.';
-      if(!summary) summary='Codex is inspecting the target in its isolated task workspace.';
+      if(!summary) summary='Assessing the event or planning the next step with the configured provider.';
       card.append(el('p','workflow-summary',summary));
       if (checks.length) {
         const evidence=el('div','check-evidence');
@@ -121,10 +123,20 @@ function suggestEventFields(){
   $('event-repo').value=rules.flatMap(r=>r.repos||[])[0]||'';
   $('event-source').value=rules.flatMap(r=>r.sources||[])[0]||'local';
   const type=rules.flatMap(r=>r.types||[]).find(t=>!t.includes('*')&&!t.includes('?'));
-  if(type)$('event-type').value=type;
+  $('event-type').value=type||'owner.request';
 }
 $('event-target').addEventListener('change',suggestEventFields);
-$('event-form').addEventListener('submit',async(event)=>{event.preventDefault();try{const result=await request('/api/events',{type:$('event-type').value,target_id:$('event-target').value,priority:Number($('event-priority').value),source:$('event-source').value,payload:{title:$('event-title').value,repo:$('event-repo').value}});$('error').hidden=true;$('event-result').textContent=result.duplicate?'Event already received.':result.queued?`Queued ${result.queued} work item(s).`:'Event recorded, but no work was queued. Check the target subscription, repository, source and priority.';await refresh();}catch(e){showError(e);}});
+function eventFromForm(){
+  const payload=JSON.parse($('event-payload').value||'{}');
+  if(!payload || Array.isArray(payload) || typeof payload!=='object')throw new Error('Payload must be a JSON object.');
+  payload.title=$('event-title').value;
+  if($('event-repo').value)payload.repo=$('event-repo').value;
+  const event={type:$('event-type').value,target_id:$('event-target').value,priority:Number($('event-priority').value),source:$('event-source').value,payload};
+  if($('event-id').value)event.id=$('event-id').value;
+  return event;
+}
+$('preview-event').addEventListener('click',()=>{try{$('event-preview').textContent=JSON.stringify(eventFromForm(),null,2);$('event-preview').hidden=false;}catch(e){showError(e);}});
+$('event-form').addEventListener('submit',async(event)=>{event.preventDefault();const button=event.submitter;button.disabled=true;try{const result=await request('/api/events',eventFromForm());$('error').hidden=true;$('event-result').textContent=`Event ${result.event_id}: `+(result.duplicate?'already received.':result.queued?`${result.queued} candidate task(s) queued. Relevance may still be pending.`:'recorded with no work queued. See its routing reasons in Received events.');eventLive=true;await refresh();}catch(e){showError(e);}finally{button.disabled=false;}});
 $('close-evidence').addEventListener('click',()=>$('evidence-dialog').close());
 $('sample').addEventListener('click',async()=>{
   const button=$('sample');button.disabled=true;
@@ -142,4 +154,31 @@ $('sample').addEventListener('click',async()=>{
     $('error').hidden=true;await refresh();
   }catch(e){showError(e);}finally{button.disabled=false;}
 });
+let eventLive=true, eventBefore=null, eventQuery='';
+function renderListeners(data){
+  if(!data)return;
+  const root=$('listener-list'),key=JSON.stringify(data);
+  if(root.dataset.key===key)return;
+  const opened=new Set(Array.from(root.querySelectorAll('details[open]')).map(n=>n.dataset.id));
+  root.dataset.key=key;root.replaceChildren();
+  for(const input of data.inputs){root.append(el('p','input-summary',input.kind==='http'?`Local HTTP / terminal / web: ${input.endpoint}`:`GitHub webhook: ${input.configured?'signing secret configured':'not configured'} (${input.endpoint})`));}
+  if(!data.sources.length)root.append(el('p','muted','No polling sources configured.'));
+  for(const source of data.sources){const card=el('article','listener-card');card.append(el('h3',null,`${source.id} · ${source.kind}`),el('p',null,source.path||source.repo||'Custom adapter'),el('p','muted',`Every ${source.interval_seconds||5}s · ${source.health.last_error|| (source.health.last_success?'Last success '+new Date(source.health.last_success*1000).toLocaleString():'Not polled yet')}`));if(source.health.gap_message)card.append(el('p',null,source.health.gap_message));root.append(card);}
+  for(const timer of data.schedules)root.append(el('p','input-summary',`Timer ${timer.id}: ${timer.type} every ${timer.interval_seconds}s for ${timer.target_id}`));
+  if(!data.schedules.length)root.append(el('p','muted','No heartbeat schedules configured.'));
+  for(const target of data.targets){const card=el('details','listener-card');card.dataset.id=target.id;card.open=opened.has(target.id);card.append(el('summary',null,`${target.id} · ${target.subscriptions.length} subscription rule(s) · relevance ${target.relevance.mode||'off'}`),el('p',null,target.goal));const list=el('ul');for(const rule of target.subscriptions)list.append(el('li',null,`Types: ${rule.types.join(', ')} | Sources: ${(rule.sources||[]).join(', ')||'any'} | Repositories: ${(rule.repos||[]).join(', ')||'any'}`));card.append(list,el('p','muted',`Minimum priority: ${target.minimum_priority}. Model confidence threshold: ${target.relevance.mode==='model'?(target.relevance.minimum_confidence??0.7):'disabled'}.`));root.append(card);}
+}
+function renderEventStream(data){
+  if(!data)return;
+  eventBefore=data.next_before;$('events-older').hidden=!eventBefore;
+  const root=$('received-list'),key=JSON.stringify(data);
+  if(root.dataset.key===key)return;root.dataset.key=key;root.replaceChildren();
+  if(!data.events.length)root.append(el('p','empty','No matching events received. Create one below or connect a source.'));
+  for(const event of data.events){const card=el('article','event-card');card.append(el('h3',null,`${event.type} · ${event.source}`),el('p','muted',`${new Date(event.created*1000).toLocaleString()} · ${event.id}`),el('p',null,event.title));for(const d of event.decisions){const score=d.confidence==null?'not assessed':`${Math.round(d.confidence*100)}% estimated confidence in “${d.decision||d.status}”`;const row=el('div','event-decision');row.append(el('strong',null,`${d.target_id}: ${d.status} · ${score}`),el('p',null,d.reason),el('small','muted',`${d.method||'historical'}${d.work_id?' · work #'+d.work_id+' '+d.work_status:' · no task'}`));card.append(row);}if(!event.decisions.length)card.append(el('p','muted','No historical decision recorded.'));const inspect=el('button','reject','View payload and decisions');inspect.addEventListener('click',async()=>{try{$('event-detail').textContent=JSON.stringify(await request('/api/events/'+encodeURIComponent(event.id)),null,2);$('event-dialog').showModal();}catch(e){showError(e);}});card.append(inspect);root.append(card);}
+}
+async function loadEvents(before){const data=await request('/api/events?q='+encodeURIComponent(eventQuery)+(before?'&before='+before:''));renderEventStream(data);}
+$('event-search-form').addEventListener('submit',async event=>{event.preventDefault();eventLive=false;eventQuery=$('event-search').value;try{await loadEvents(null);}catch(e){showError(e);}});
+$('events-older').addEventListener('click',async()=>{eventLive=false;try{await loadEvents(eventBefore);}catch(e){showError(e);}});
+$('event-live').addEventListener('click',()=>{eventLive=true;eventQuery='';$('event-search').value='';refresh();});
+$('close-event').addEventListener('click',()=>$('event-dialog').close());
 refresh();setInterval(refresh,1000);
