@@ -125,3 +125,11 @@ authenticate that profile separately and review its configuration. `doctor`
 checks the same environment. The planner still uses Codex read-only sandboxing;
 this is not an attestation of arbitrary CLI hooks, network behavior or plugins.
 Use a dedicated OS account/container when a stronger planner boundary is needed.
+
+## Planning budgets
+
+`max_model_calls_per_day` caps the installation (default 1000), and each target
+may set `model_calls_per_day` (default 100). Reservations are atomic and durable,
+include failed real-provider attempts, and reset at UTC midnight. Exhausted work
+is blocked. These are invocation budgets: Codex CLI does not provide this runtime
+with an authoritative per-call bill, so dollar/token limits are not claimed.

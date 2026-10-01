@@ -9,7 +9,7 @@ import time
 import uuid
 
 from .agents import AgentRegistry, CodexAgent, DemoAgent, validate_plan
-from .store import Store
+from .store import Store, BudgetExceeded
 from .tools import ToolRegistry, CheckFailed
 from .workspaces import Workspaces
 
@@ -145,6 +145,8 @@ class Engine:
                                              "planning_round": work.get("planning_round", 0) + 1,
                                              "max_planning_rounds": self.config.max_planning_rounds,
                                              "phase": "continuing" if work.get("planning_round", 0) else "initial"}
+                    if not isinstance(provider, DemoAgent):
+                        self.store.reserve_model_call(target.id,target.model_calls_per_day,self.config.max_model_calls_per_day)
                     plan = validate_plan(provider.plan(target, event, state), target, self.registry)
                     plan = self._require_checks(target, work, plan)
                     self.store.save_plan(work["id"], plan)
@@ -214,6 +216,8 @@ class Engine:
                 with self.store.connect() as db:
                     self.store.log(db,"goals_verified",goals,target.id,work["id"])
             self.store.finish(work, artifact=artifact)
+        except BudgetExceeded as exc:
+            self.store.finish(work, "blocked", str(exc))
         except Exception as exc:
             self.store.finish(work, "failed", str(exc)[:8000])
 
