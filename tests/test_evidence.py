@@ -30,7 +30,7 @@ class EvidenceTests(unittest.TestCase):
             recipes={"owner.test": plan}, checks={"input": ["{python}", "-B", "check.py"]},
             required_checks=("input",))
         # Explicit owner-controlled fixture mode, independent of host namespaces.
-        self.config = Config((self.target,), self.root / "state.db", sandbox="trusted-local")
+        self.config = Config((self.target,), self.root / "state.db", sandbox="trusted-local",backend="demo")
 
     def tearDown(self):
         self.temp.cleanup()

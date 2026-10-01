@@ -20,7 +20,7 @@ fallback to a deterministic planner.
 claude auth login
 claude auth status
 opendots init --directory "$HOME/.config/opendots-project" \
-  --workspace /absolute/path/to/your/repository --backend claude
+  --workspace /absolute/path/to/your/repository --goal "Your goal" --backend claude
 opendots --config "$HOME/.config/opendots-project/config.json" doctor
 ```
 

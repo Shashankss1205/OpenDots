@@ -138,7 +138,7 @@ class CodexAgent:
     def plan(self, target, event, state):
         command_path = shutil.which(self.command)
         if not command_path:
-            raise RuntimeError("Codex CLI is not installed. Install and authenticate it, or select the demo backend.")
+            raise RuntimeError("Codex CLI is not installed. Install and authenticate it.")
         prompt = self.prompt(target, event, state)
         with tempfile.TemporaryDirectory(prefix="opendots-codex-") as directory:
             schema = Path(directory) / "plan.schema.json"

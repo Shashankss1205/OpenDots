@@ -29,7 +29,7 @@ class Config:
     targets: tuple[Target, ...]
     database: Path
     workers: int = 4
-    backend: str = "demo"
+    backend: str = "claude"
     agent_timeout: int = 180
     codex_command: str = "codex"
     model: str | None = None
@@ -171,7 +171,7 @@ def load_config(path: Path) -> Config:
     workers = int(raw.get("workers", 4))
     if workers < 1:
         raise ValueError("workers must be positive")
-    backend = raw.get("backend", "demo")
+    backend = raw.get("backend", "claude")
     if not isinstance(backend, str) or not backend:
         raise ValueError("backend must name a registered provider")
     schedules = raw.get("schedules", [])

@@ -11,7 +11,7 @@ class AuditFixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory); source=root/'source'; source.mkdir(); (source/'value').write_text('old')
             target=Target('t','T','Test',source,({'types':['test']},),{'note':'auto'})
-            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local',backend='demo'))
             engine.ingest({'id':'one','type':'test'}); engine.drain()
             old=engine.workspaces.proposal(1)
             engine.workspaces.accept(1,old['commit'])
@@ -33,7 +33,7 @@ class AuditFixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory); source=root/'source'; source.mkdir()
             target=Target('t','T','Test',source,({'types':['test']},),{'note':'auto'})
-            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local',backend='demo'))
             for number in range(2):
                 engine.ingest({'id':str(number),'type':'test'});engine.drain()
             first=engine.workspaces.proposal(1); second=engine.workspaces.proposal(2)
@@ -81,7 +81,7 @@ class AuditFixTests(unittest.TestCase):
             class Planner:
                 def plan(self, *args):
                     return {'summary':'Check', 'actions':[{'tool':'run_check','args':{'name':'check'}}]}
-            config = Config((target,), root/'state.db', sandbox='trusted-local')
+            config = Config((target,), root/'state.db', sandbox='trusted-local',backend='demo')
             engine = Engine(config, agent=Planner()); engine.ingest({'type':'test'}); engine.drain()
             work = engine.snapshot()['work'][0]
             changed = replace(target, checks={'check':['{python}','-c','print("new")']})
@@ -105,7 +105,7 @@ class AuditFixTests(unittest.TestCase):
                 def plan(self,*args):
                     return {'summary':'Edit','actions':[{'tool':'write_file','args':{
                         'path':'a.txt','content':content,'expected_sha256':digest('old\n')}}]}
-            engine = Engine(Config((target,),root/'state.db',sandbox='trusted-local'),agent=Planner())
+            engine = Engine(Config((target,),root/'state.db',sandbox='trusted-local',backend='demo'),agent=Planner())
             engine.ingest({'type':'test'}); engine.drain()
             artifact = engine.store.state('t')['artifacts'][0]
             patch = Path(artifact['patch'])
@@ -119,7 +119,7 @@ class AuditFixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory); source=root/'source'; source.mkdir()
             target=Target('t','T','Test',source,({'types':['test']},),{'note':'approval'})
-            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local',backend='demo'))
             engine.ingest({'id':'first','type':'test'});engine.drain()
             for n in range(205): engine.ingest({'id':str(n),'type':'test'})
             state=engine.snapshot()
@@ -151,7 +151,7 @@ class AuditFixTests(unittest.TestCase):
         from opendots.setup import initialize
         from opendots.config import load_config
         with tempfile.TemporaryDirectory() as directory:
-            path=initialize(Path(directory)/'config')
+            path=initialize(Path(directory)/'config', demo=True)
             config=load_config(path)
             self.assertEqual(len(config.targets),2)
             self.assertTrue(all(t.workspace.is_dir() for t in config.targets))
@@ -172,7 +172,7 @@ class AuditFixTests(unittest.TestCase):
                         assert results[-1]['result']['exit_code'] != 0
                         actions=[{'tool':'write_file','args':{'path':'value','content':'good','expected_sha256':digest('bad')}}]
                     return {'summary':'Validate','actions':actions+[{'tool':'run_check','args':{'name':'valid'}}]}
-            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'),agent=Planner())
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local',backend='demo'),agent=Planner())
             engine.ingest({'type':'test'});result=engine.drain()
             self.assertEqual(result['counts'],{'completed':1})
             self.assertEqual(result['work'][0]['repair_attempts'],1)
@@ -292,7 +292,7 @@ class AuditFixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);source=root/'source';source.mkdir()
             target=Target('t','T','Test',source,({'types':['owner.*']},),{'note':'approval'})
-            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local',backend='demo'))
             server=make_server(engine,port=0);thread=threading.Thread(target=server.serve_forever);thread.start()
             try:
                 session=Session(Client(f'http://127.0.0.1:{server.server_address[1]}'))
@@ -425,7 +425,7 @@ class AuditFixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);source=root/'source';source.mkdir()
             target=Target('t','T','Test',source,({'types':['test']},),{'note':'deny'})
-            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local',backend='demo'))
             engine.ingest({'id':'first','type':'test'});engine.drain()
             with self.assertRaises(ValueError):engine.retry(1)
             result=engine.retry(1,True);self.assertEqual(result['queued'],1)

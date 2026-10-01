@@ -109,7 +109,7 @@ function render(data) {
     const details=el('details');details.dataset.id=String(audit.id);details.open=opened.has(String(audit.id));details.append(el('summary',null,'View evidence'),el('pre',null,JSON.stringify(audit.detail,null,2)));content.append(details);
     row.append(el('div','audit-icon',audit.kind.includes('failed')?'!':'·'),content);timeline.append(row);
   }
-  if(!data.audit.length)timeline.append(el('div','empty','Waiting for the first event. Run the demo to watch the loop.'));
+  if(!data.audit.length)timeline.append(el('div','empty','Waiting for an event. Send a request or connect an event source.'));
   const queue=$('queue');queue.replaceChildren();
   for(const work of data.work.slice(0,8)){const row=el('div','queue-row');row.append(el('span',null,`#${work.id} · ${work.target_id}`),el('span',`queue-status ${work.status}`,work.status.replaceAll('_',' ')));queue.append(row);}
 }

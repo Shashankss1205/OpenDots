@@ -2,7 +2,7 @@
 
 ## Setup
 
-Python 3.11+, Git and Linux bubblewrap are required for default isolated checks. The application has no third-party Python runtime dependencies. Use `opendots init` to create configuration from packaged templates, or select a repository config with `--config`.
+Python 3.11+, Git and Linux bubblewrap are required for default isolated checks. The application has no third-party Python runtime dependencies. Use `opendots init --workspace PATH --goal "Your goal"` to create a real configuration; `init --demo` explicitly creates packaged test fixtures, or select a repository config with `--config`.
 
 ```bash
 python3 -m venv .venv
@@ -57,7 +57,7 @@ OPENDOTS_TEST_SANDBOX=trusted-local python3 -m unittest discover -s tests -v
 python3 -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
 ```
 
-Use the relaxed test command only for explicitly trusted disposable fixtures without namespaces. Wheel building needs setuptools 77+. Wheels contain the package, dashboard, first-run templates, fixture workspaces and compatibility commands. Git, Bubblewrap and the optional Codex CLI remain external executables. `opendots init` creates the external config and sources.
+Use the relaxed test command only for explicitly trusted disposable fixtures without namespaces. Wheel building needs setuptools 77+. Wheels contain the package, dashboard, first-run templates, fixture workspaces and compatibility commands. Git, Bubblewrap and the optional Codex CLI remain external executables. `opendots init --workspace PATH --goal "Your goal"` creates the external config.
 
 ## Deployment and extensions
 

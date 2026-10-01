@@ -1,235 +1,163 @@
 # OpenDots
 
-![OpenDots architecture: your goal and incoming events drive an agent that plans with Claude or Codex, follows your rules, runs checks, and saves changes for your review.](assets/opendots-overview.svg)
+![OpenDots architecture: your goal and incoming events drive planning, permitted actions, checks, and changes for your review.](assets/opendots-overview.svg)
 
-**Give an AI agent a goal. Let it return to that goal over time. Review what it does.**
+**Give an agent your goal. Connect the information it needs. Review the work it proposes.**
 
-OpenDots is an open-source program that runs on your computer and coordinates AI agents working on a code repository. You give an agent a goal, choose which files it may change, and decide which actions need your approval. Claude Code or Codex supplies the AI; OpenDots manages when work starts, what is allowed, and what gets saved.
+OpenDots runs on your computer and coordinates Claude Code or Codex around a goal you choose. It listens for incoming information, keeps task history and notes, and can check progress on a schedule. You choose the project, allowed changes, checks, and approval rules.
 
-For example: **“Keep improving this project's setup errors so a new user knows what to do next.”** OpenDots can check in every 30 minutes, look at the code and previous notes, choose a useful next step, and propose a small change. A new issue or feedback message can also trigger work.
-
-A scheduled check-in is called a **heartbeat**. An incoming message is an **event**. The **runtime** is the OpenDots process you leave running. In configuration, each agent and its goal is called a **target**.
-
-[Features](#what-can-it-do) · [Requirements](#what-you-need) · [First run](#run-it-for-the-first-time) · [Talk to your agent](#interact-with-your-agent)
+A **heartbeat** is a scheduled check-in. An **event** is a message from you or a connected tool. A **target** is one configured agent with its own goal. The **runtime** is the process you leave running.
 
 ## What can it do?
 
-- **Work toward a saved goal:** revisit an objective without you repeating the prompt each time.
-- **Check in on a schedule:** use heartbeats to reassess progress while the runtime is running.
-- **Respond to new information:** receive your prompts, GitHub activity, or messages from your own tools.
-- **Investigate and propose changes:** read allowed files, compare next steps, and run checks you configure.
-- **Keep you in control:** require approval for changes and retain a patch and Git branch for review.
-- **Remember progress:** keep task history and notes across restarts; accept a proposal to carry its code into future tasks.
-- **Manage multiple agents:** configure their goals, permissions, schedules, and event sources separately.
-- **Use a terminal or browser:** both interfaces connect to the same local runtime.
+- Pursue your saved goal using Claude Code or Codex.
+- React to terminal requests, local HTTP messages, JSONL files, and GitHub activity.
+- Revisit progress on a configurable heartbeat schedule.
+- Read project files, propose scoped edits, and run checks you configure.
+- Ask for approval, retain local patches, and preserve history across restarts.
+- Manage multiple agents through a terminal or a local web interface.
 
-**Current stage:** a local prototype for repository work. It does not automatically publish GitHub PRs, deploy your application, or pull upstream changes. Model calls use your provider account and its limits. A check passing proves only what that check covers.
+This is a local prototype. It does not automatically publish PRs, deploy applications, or pull upstream changes. Model access comes from your provider account. Checks prove only what you configure them to test.
 
 ## What you need
 
-| Requirement | Why you need it |
-| --- | --- |
-| **A Linux machine** with working Bubblewrap namespaces | Runs the runtime and isolates configured checks. The walkthrough below uses Ubuntu/Debian; native macOS and Windows are not this setup. |
-| **Python 3.11 or newer, Git, and Bubblewrap** | Runs OpenDots and keeps reviewable code changes. |
-| **Claude Code or Codex CLI, installed and signed in** | Provides the AI that chooses the next steps. Pick one; you do not need both. |
-| **Internet access and an account that can use your chosen provider** | Lets the planning CLI contact its model service. OpenDots does not include model access. |
+- **Linux, Python 3.11+, Git, and Bubblewrap** with working namespaces for isolated checks.
+- **Claude Code or Codex CLI**, installed and signed in. See [provider setup](docs/PROVIDERS.md).
+- **Your own project directory and a goal** you want the agent to pursue.
 
-You do **not** need Docker, a cloud server, or a GitHub token for the first run. We will use the OpenDots repository itself as the agent's real project.
+On Ubuntu/Debian, install prerequisites with `sudo apt-get install python3 python3-venv git bubblewrap curl`. Check `python3 --version` is at least 3.11. Docker and a GitHub token are not needed to start.
 
-## Run it for the first time
+## Install OpenDots
 
-### 1. Prepare your machine
+Choose **one** method.
 
-On Ubuntu/Debian, open a terminal and run:
+### Option A: download and run the installer
 
 ```bash
-sudo apt-get update
-sudo apt-get install git bubblewrap python3 python3-venv curl
-python3 --version
+curl -fsSLo install-opendots.sh https://raw.githubusercontent.com/Shashankss1205/OpenDots/main/install.sh
+bash install-opendots.sh
 ```
 
-The version must be **3.11 or newer**. If your distribution provides an older Python, install a supported Python before continuing. Bubblewrap must also be usable on your machine; the diagnostic in step 4 checks that.
-
-### 2. Set up the AI
-
-This walkthrough uses **Claude Code**. If it is not installed, follow the [official Claude Code installation instructions](https://code.claude.com/docs/en/overview). Then run:
+The script installs into a separate Python environment without sudo. Follow its printed PATH instruction; with the default location:
 
 ```bash
-claude --version
-claude auth login
-claude auth status
+export PATH="$HOME/.local/share/opendots/runtime/bin:$PATH"
 ```
 
-Finish signing in before continuing. Already use Codex? Follow [provider setup](docs/PROVIDERS.md), sign in to Codex, and change `"backend": "claude"` to `"backend": "codex"` in the file used below.
+Add that line to your shell startup file for new terminals. `--prefix DIR` chooses a different installation directory; `--ref COMMIT` pins a reviewed revision. Existing installations are not overwritten.
 
-### 3. Download OpenDots and look at the goal
+### Option B: install the Python package from GitHub
+
+With [pipx](https://pipx.pypa.io/stable/installation/) installed:
 
 ```bash
-git clone https://github.com/Shashankss1205/OpenDots.git
-cd OpenDots
+pipx install 'git+https://github.com/Shashankss1205/OpenDots.git'
+pipx ensurepath
 ```
 
-Open [`examples/goal-agent.json`](examples/goal-agent.json) in your editor. It already defines one agent, named `project`, with this goal:
+Open a new terminal if pipx asks you to. Both methods provide the `opendots` command. There is no published npm package or PyPI release being advertised here.
 
-> Improve OpenDots' error messages for missing configuration, unavailable AI providers, and invalid project paths. Compare useful next steps and propose one focused change at a time.
+## Start with your project and your goal
 
-For this first run, you can keep the configuration as it is:
+### 1. Create your configuration
 
-- The agent works on a managed copy of this actual repository.
-- It may propose edits to `opendots/setup.py` and `opendots/__main__.py`.
-- It asks before writing; it can read files, save notes, and run the configured Python syntax check automatically.
-- It checks in every 30 minutes, with an initial check-in at startup.
-
-The included check verifies **Python syntax**, not whether an improvement is correct. Inspect the proposal and add suitable behavioral tests before accepting a fix.
-
-### 4. Check that everything is ready
-
-From the `OpenDots` directory:
+First sign in to your chosen CLI (`claude auth login`, or `codex login`). From your project's directory, replace the goal text below with your own objective:
 
 ```bash
-python3 -m opendots --config examples/goal-agent.json doctor
+opendots init --workspace "$PWD" --goal "Describe what you want this agent to achieve" --backend claude
 ```
 
-Look for the top-level **`"ok": true`**. If it is false, fix the reported problem first—usually provider login, a missing executable, or unavailable Bubblewrap isolation. A successful diagnostic means the prerequisites pass; your first completed task is the live test of the full workflow.
+Use `--backend codex` if that is your provider. No sample project, predefined repair, or demo event is created.
 
-These commands run directly from the downloaded source. You do not need to install a Python package for this walkthrough.
+The command prints your configuration path. By default it is `~/.config/opendots/config.json` (or under `XDG_CONFIG_HOME`). Open that file to review your saved goal and settings. Normal setup starts with **reads and notes allowed, no writable paths, no configured checks, and no heartbeat**. Before enabling changes, set `write_paths`, `checks`, and `required_checks` for your project.
 
-### 5. Start the runtime
+Want periodic work? Add `--heartbeat 1800` to `init` for a 30-minute check-in. A heartbeat can start work immediately when the runtime starts, and uses your provider's allowance. You can also configure schedules later.
 
-In the same terminal:
+### 2. Check the setup, then start the runtime
 
 ```bash
-python3 -m opendots --config examples/goal-agent.json serve --port 8766
+opendots doctor
+opendots serve
 ```
 
-**Leave this terminal open.** This is the process that runs the agents. The first heartbeat can start work immediately, so provider usage may begin now. Further planning is limited by the configured budgets.
+Continue only when `doctor` reports top-level `"ok": true`. It checks configuration, executables, authentication, and isolation; it is not proof of a completed live model task. Leave the `serve` terminal open.
 
-### 6. Open the agent interface
+If you used `init --directory DIR`, pass the printed path explicitly: `opendots --config DIR/config.json doctor` and `opendots --config DIR/config.json serve`. Configuration and runtime data must stay outside your project directory.
 
-Open a **second terminal**, go to the same `OpenDots` directory, and run:
+### 3. Open an interface
+
+In another terminal:
 
 ```bash
-python3 -m opendots tui --url http://127.0.0.1:8766
+opendots
 ```
 
-You should see a connected terminal interface. You can also open **http://127.0.0.1:8766** in a browser on the same machine for the local dashboard.
+Or open **http://127.0.0.1:8765** on the same machine. Both interfaces use the same runtime.
 
-## Interact with your agent
+## Talk to your agent
 
-### Select it and give it a request
-
-Type these into the **OpenDots prompt**, not your normal shell:
+Type these commands inside the OpenDots terminal interface, not your shell:
 
 ```text
 /agents
 /use project
-Inspect the setup errors and propose one small improvement. Explain your choice before asking me to approve a change.
 ```
 
-A request adds work to this agent's queue. If its startup heartbeat is already working, your request waits behind it. The agent may investigate, ask for approval, finish without an edit, or explain a blocker; a particular change is not guaranteed.
+Then type a normal message about your goal. It becomes an `owner.request` event for the selected agent. The agent can investigate, save notes, or explain a blocker. It cannot write until you configure allowed paths and approve the proposed action.
 
-### See what is happening
-
-| At the OpenDots prompt | What it does |
+| Command | What it does |
 | --- | --- |
-| `/status` | Shows the provider, connection health, and planning usage. |
-| `/activity` | Shows recent activity. |
-| `/reviews` | Lists tasks waiting for your approval. |
-| `/work ID` | Shows a task's results and check evidence. Replace `ID` with its task number. |
-| `/pause` / `/resume` | Stops or resumes the selected agent taking new work. |
-| `/help` | Shows all available commands. |
+| `/status` | Show the provider, source health, and model usage. |
+| `/activity` | See what is happening. |
+| `/reviews` | Find work waiting for approval. |
+| `/review ID` | Inspect the action for the task number shown. |
+| `/approve ID` | Request approval; type the requested confirmation to permit that exact action. |
+| `/work ID` | Inspect task results and check evidence. |
+| `/proposal ID` | Inspect a completed patch and its acceptance command. |
+| `/pause` / `/resume` | Stop or resume the selected agent taking new work. |
+| `/help` | Show all commands. |
 
-### Review a change before allowing it
+Accepting a completed proposal makes its commit the base of future tasks; it does not change your original checkout or push code. Pause the agent and finish or cancel active work before acceptance. Editing your saved goal or subscriptions requires restarting the runtime.
 
-Suppose `/reviews` lists task **1**. Inspect it first:
+`/quit` or Ctrl+D disconnects the interface. **Ctrl+C in the `serve` terminal stops the runtime.** Pausing does not cancel active work or stop incoming messages from queuing.
 
-```text
-/review 1
-```
+## Connect incoming information
 
-If you agree with the proposed action:
+A **source** brings messages into OpenDots. A **subscription** specifies which message types an agent listens to. Setting up one without the other does not create useful work.
 
-```text
-/approve 1
-```
-
-The interface asks you to type `approve 1` again to confirm. Use the actual task number you see. Each approval permits the displayed action; later writes may need another approval. You can use `/reject 1` instead.
-
-After the task completes, inspect the result:
-
-```text
-/work 1
-/proposal 1
-```
-
-`/proposal` shows the retained patch and an exact `/accept ID COMMIT` command. To carry that change into future tasks, pause the agent, finish or cancel other active work, then use the displayed acceptance command and resume. **Accepting changes the agent's working base; it does not modify your original checkout or push to GitHub.** [More about review and acceptance](docs/GOALS_AND_EVENTS.md#6-review-the-work-and-carry-progress-forward).
-
-### Disconnect or stop
-
-- **Close just the interface:** type `/quit` or press Ctrl+D. The runtime in the first terminal keeps running.
-- **Stop the runtime:** press Ctrl+C in the first terminal. Start the same command again to reopen its saved state.
-- **Pause new tasks:** use `/pause`. Incoming events can still queue; pausing does not cancel an active task.
-
-## Give it your own project and connect events
-
-Once you have completed a first task, [follow the configuration guide](docs/GOALS_AND_EVENTS.md#2-define-the-persistent-goal-and-allowed-work) to change the project directory (`workspace`), saved goal (`objective`), permitted files, and checks. Restart after editing the configuration. Typing a normal request does not replace the saved goal.
-
-A source brings information in; a subscription decides which agent receives it. Connect both using the [event-stream guide](docs/GOALS_AND_EVENTS.md#5-connect-incoming-event-streams):
-
-| Input | What it is for |
+| Method | How information arrives |
 | --- | --- |
-| Heartbeat | “Check progress again every 30 minutes.” |
-| Terminal prompt | “Investigate this problem now.” |
-| JSONL file or local HTTP request | Let a CI tool, log processor, or feedback collector send messages. |
-| GitHub polling | React to new matching issue, comment, or PR activity. |
-| Signed GitHub webhook | Receive GitHub deliveries through a separately configured receiver. |
+| Terminal / web form | You submit a message. |
+| HTTP | Your tool sends a JSON event to `POST /api/events`. |
+| JSONL | Your tool appends one JSON object per line to a watched inbox. |
+| GitHub polling | OpenDots periodically fetches new repository activity. |
+| GitHub webhook | A separately configured receiver forwards signed deliveries. |
+| Heartbeat | OpenDots emits a scheduled event while running. |
 
-Slack, email, and arbitrary file watching are not built-in connectors. Incoming GitHub activity also does not pull new code into the agent's copy; use the documented [source refresh workflow](docs/GOALS_AND_EVENTS.md#6-review-the-work-and-carry-progress-forward).
+Native Slack, email, Kafka, Redis, and arbitrary filesystem-watch adapters are not built in. External tools can bridge into HTTP or JSONL. GitHub activity does not automatically refresh the agent's source-code snapshot.
 
-## Optional: install the short command
+## Documentation
 
-From your `OpenDots` checkout:
-
-```bash
-bash install.sh --source "$PWD"
-export PATH="$HOME/.local/share/opendots/runtime/bin:$PATH"
-opendots --help
-```
-
-This creates a separate Python environment without sudo. You can now use `opendots` instead of `python3 -m opendots`. Add that PATH line to your shell startup file to keep it in new terminals. Existing installations are not overwritten.
+- [Provider setup](docs/PROVIDERS.md): Claude Code and Codex authentication.
+- [Implementation](docs/IMPLEMENTATION.md): configuration, policies, event routing, and storage.
+- [Development and operations](docs/DEVELOPMENT.md): checks, packaging, services, backup, and source refresh.
+- [Validation](docs/VALIDATION.md): tested behavior and remaining live-provider validation.
+- [Roadmap](docs/ROADMAP.md) and [Contributing](CONTRIBUTING.md).
 
 <details>
-<summary>Run as a background service on Linux with systemd</summary>
+<summary>Show me a demo or a worked sample</summary>
 
-Stop the foreground runtime first so two processes do not use the same database. From the checkout, with the installed command available:
+Demos are optional and separate from normal setup. For deterministic fixtures:
 
 ```bash
-opendots --config examples/goal-agent.json service install --name opendots-goal
-opendots service start --name opendots-goal
-opendots tui --url http://127.0.0.1:8765
+opendots init --demo --directory "$HOME/.config/opendots-demo"
+opendots --config "$HOME/.config/opendots-demo/config.json" serve --port 8766
 ```
 
-The service uses port **8765**, whereas the first-run walkthrough uses **8766**. Use `opendots service status --name opendots-goal` to inspect it and `opendots service stop --name opendots-goal` to stop it. User services normally follow your login session; running after logout requires user lingering configured with your administrator.
+Open http://127.0.0.1:8766 and explicitly select the five-event demo. It uses no model and makes no changes to a real cluster or upstream repository.
+
+For a fully worked real-provider sample using OpenDots' own source, see [the optional goal walkthrough](docs/GOALS_AND_EVENTS.md). Its predefined goal and syntax check are illustrative; they are not applied to your project by normal setup.
 
 </details>
-
-## Need help?
-
-| What you see | What to try |
-| --- | --- |
-| `claude` is missing or authentication fails | Finish provider installation/login, then rerun `doctor`. |
-| `doctor` reports a sandbox failure | Check Linux Bubblewrap support and namespace permissions. |
-| Kubernetes/React agents appear | You connected to another configuration. Use the explicit goal config and port **8766** above. |
-| An agent is connected but idle | Check `/status`, pause state, `/reviews`, and the event subscriptions. |
-| A task is waiting | Check `/reviews`; one waiting task blocks later work for that agent. |
-
-For full setup and troubleshooting, read [Goals, heartbeats and events](docs/GOALS_AND_EVENTS.md). For authentication, read [Provider setup](docs/PROVIDERS.md).
-
-## Learn more and contribute
-
-- [Implementation](docs/IMPLEMENTATION.md): components, configuration, and runtime boundaries.
-- [Validation](docs/VALIDATION.md): what has been tested and what remains unverified. Claude protocol tests do not establish a successful live model run.
-- [Development](docs/DEVELOPMENT.md): tests, packaging, optional deterministic fixtures, deployment, and maintenance.
-- [Roadmap](docs/ROADMAP.md) and [Contributing](CONTRIBUTING.md).
 
 OpenDots is an independent experiment inspired by OpenAI's Dots idea. MIT licensed; see [LICENSE](LICENSE) and [NOTICE](NOTICE).

@@ -34,7 +34,7 @@ jobs:
           "$RUNNER_TEMP/installed/bin/python" -m pip install dist/*.whl
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/installed/bin/opendots" --version
-          "$RUNNER_TEMP/installed/bin/opendots" init --directory "$RUNNER_TEMP/opendots-smoke"
+          "$RUNNER_TEMP/installed/bin/opendots" init --demo --directory "$RUNNER_TEMP/opendots-smoke"
           "$RUNNER_TEMP/installed/bin/opendots" --config "$RUNNER_TEMP/opendots-smoke/config.json" status
       - uses: actions/upload-artifact@v4
         with:

@@ -9,34 +9,51 @@ from .config import load_config
 
 
 def default_config():
-    local = Path('examples/config.json')
-    if local.is_file():
-        return local
     return Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home()/'.config'))) / 'opendots/config.json'
 
 
-def initialize(directory=None, workspace=None, backend='demo'):
+def initialize(directory=None, workspace=None, backend='claude', goal=None, demo=False, heartbeat=0):
     root = Path(directory) if directory else Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home()/'.config')))/'opendots'
     root = root.expanduser().resolve()
     destination = root/'config.json'
     if destination.exists():
         raise ValueError(f'Configuration already exists: {destination}')
-    if workspace and not Path(workspace).expanduser().resolve().is_dir():
-        raise ValueError('Workspace must be an existing directory')
-    root.mkdir(parents=True, exist_ok=True)
-    template = Path(__file__).parent/'templates'
-    config = json.loads((template/'config.json').read_text())
-    if workspace:
-        config['targets'] = [{'id':'project','name':'My project','objective':'Investigate incoming events and propose reviewable improvements.',
-            'workspace':str(Path(workspace).expanduser().resolve()),'subscriptions':[{'types':['owner.*']}],
-            'policy':{'read_file':'auto','note':'auto','write_file':'approval','replace_text':'approval','run_check':'approval'},
-            'write_paths':[], 'checks':{}, 'required_checks':[]}]
-    else:
+    if type(heartbeat) is not int or heartbeat < 0:
+        raise ValueError('Heartbeat must be zero (off) or a positive number of seconds')
+    if demo:
+        if workspace or goal or heartbeat:
+            raise ValueError('--demo cannot be combined with a workspace, goal, or heartbeat')
+        template = Path(__file__).parent/'templates'
+        config = json.loads((template/'config.json').read_text())
         if (root/'workspaces').exists():
             raise ValueError('Demo workspace destination already exists; choose a new directory')
+        root.mkdir(parents=True, exist_ok=True)
         shutil.copytree(template/'workspaces', root/'workspaces')
-    config['backend'] = backend
+        config['backend'] = 'demo'
+    else:
+        if backend == 'demo':
+            raise ValueError('Demo recipes require explicit --demo; choose claude or codex for real work')
+        if not workspace or not Path(workspace).expanduser().resolve().is_dir():
+            raise ValueError('Pass --workspace with an existing project directory')
+        if not isinstance(goal, str) or not goal.strip():
+            raise ValueError('Pass --goal with the objective you want your agent to pursue')
+        config = {'backend': backend, 'sandbox': 'bubblewrap', 'targets': [{
+            'id': 'project', 'name': 'My project', 'objective': goal.strip(),
+            'workspace': str(Path(workspace).expanduser().resolve()),
+            'subscriptions': [{'types': ['owner.*', 'input.*'], 'sources': ['local', 'file']},
+                              {'types': ['timer.heartbeat'], 'sources': ['timer']}],
+            'policy': {'read_file': 'auto', 'note': 'auto', 'write_file': 'approval',
+                       'replace_text': 'approval', 'run_check': 'approval'},
+            'write_paths': [], 'checks': {}, 'required_checks': []}],
+            'sources': [], 'schedules': []}
+        if heartbeat:
+            config['schedules'] = [{'id': 'project-heartbeat', 'target_id': 'project',
+                'type': 'timer.heartbeat', 'interval_seconds': heartbeat,
+                'payload': {'title': 'Reassess progress toward the configured goal'}}]
+        root.mkdir(parents=True, exist_ok=True)
     data = root/'data' if directory else Path(os.environ.get('XDG_DATA_HOME', str(Path.home()/'.local/share')))/'opendots'
+    if not demo and data.resolve().is_relative_to(Path(workspace).expanduser().resolve()):
+        raise ValueError('Configuration/data directory must be outside the project workspace')
     config['database'] = str((data/'state.db').resolve())
     destination.write_text(json.dumps(config, indent=2)+'\n')
     destination.chmod(0o600)

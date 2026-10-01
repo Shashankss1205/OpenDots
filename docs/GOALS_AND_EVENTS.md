@@ -1,4 +1,6 @@
-# Run a real goal with heartbeats and event streams
+# Optional sample: a real goal with heartbeats and event streams
+
+This is an opt-in worked sample, not the normal onboarding path. For your own project and goal, start with the [README](../README.md).
 
 This walkthrough uses Claude Code or Codex to work on the **actual OpenDots
 repository**. It has no deterministic recipes and creates no Kubernetes/React
