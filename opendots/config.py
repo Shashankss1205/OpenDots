@@ -38,9 +38,60 @@ class Config:
     source_workers: int = 4
 
 
+def validate_config(raw):
+    if not isinstance(raw, dict) or not isinstance(raw.get("targets"), list):
+        raise ValueError("config.targets must be an array")
+    for key, minimum in (("workers",1),("source_workers",1),("agent_timeout",1),
+                         ("max_planning_rounds",1),("max_repair_attempts",0)):
+        if key in raw and (type(raw[key]) is not int or raw[key] < minimum):
+            raise ValueError(f"config.{key} must be an integer >= {minimum}")
+    for index, target in enumerate(raw["targets"]):
+        prefix = f"targets[{index}]"
+        if not isinstance(target, dict):
+            raise ValueError(f"{prefix} must be an object")
+        for key in ("id","name","objective","workspace"):
+            if not isinstance(target.get(key), str) or not target[key]:
+                raise ValueError(f"{prefix}.{key} must be a nonempty string")
+        for key in ("policy","checks","recipes","desired_state"):
+            if not isinstance(target.get(key, {}), dict):
+                raise ValueError(f"{prefix}.{key} must be an object")
+        for key in ("write_paths","skills","required_checks"):
+            values = target.get(key, [])
+            if not isinstance(values, list) or any(not isinstance(v,str) or not v for v in values):
+                raise ValueError(f"{prefix}.{key} must be an array of nonempty strings")
+        for name, command in target.get("checks", {}).items():
+            if not isinstance(command,list) or not command or any(not isinstance(v,str) for v in command):
+                raise ValueError(f"{prefix}.checks.{name} must be a nonempty argv array")
+        priority = target.get("minimum_priority",20)
+        if type(priority) is not int or not 0 <= priority <= 100:
+            raise ValueError(f"{prefix}.minimum_priority must be an integer from 0 to 100")
+        if not isinstance(target.get("subscriptions", []), list):
+            raise ValueError(f"{prefix}.subscriptions must be an array")
+        for rule in target.get("subscriptions", []):
+            if not isinstance(rule,dict):
+                raise ValueError(f"{prefix}.subscriptions entries must be objects")
+            for key in ("types","repos","sources"):
+                if key in rule and (not isinstance(rule[key],list) or any(not isinstance(v,str) for v in rule[key])):
+                    raise ValueError(f"{prefix}.subscriptions.{key} must be an array of strings")
+    for collection in ("sources","schedules"):
+        values = raw.get(collection, [])
+        if not isinstance(values,list) or any(not isinstance(v,dict) for v in values):
+            raise ValueError(f"config.{collection} must be an array of objects")
+        for value in values:
+            if not isinstance(value.get("id"),str) or not value["id"]:
+                raise ValueError(f"{collection}.id must be a nonempty string")
+            if "interval_seconds" in value and (type(value["interval_seconds"]) is not int or value["interval_seconds"] < 1):
+                raise ValueError(f"{collection}.interval_seconds must be positive")
+    for schedule in raw.get("schedules",[]):
+        for key in ("target_id","type","interval_seconds"):
+            if key not in schedule:
+                raise ValueError(f"schedules.{key} is required")
+
+
 def load_config(path: Path) -> Config:
     path = path.resolve()
     raw = json.loads(path.read_text())
+    validate_config(raw)
     base = path.parent
     targets = []
     ids = set()
