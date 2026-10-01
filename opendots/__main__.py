@@ -40,6 +40,13 @@ def main():
     accept.add_argument("--commit", required=True)
     sync = commands.add_parser("sync", help="Replace the task base with a fresh source snapshot; stop the service first")
     sync.add_argument("target_id")
+    backup = commands.add_parser("backup", help="Back up stopped runtime data to a new directory")
+    backup.add_argument("directory", type=Path)
+    restore = commands.add_parser("restore", help="Restore a backup to its original, empty runtime paths")
+    restore.add_argument("directory", type=Path)
+    cleanup = commands.add_parser("cleanup", help="Preview or archive old terminal task workspaces")
+    cleanup.add_argument("--older-than", type=int, default=30, metavar="DAYS")
+    cleanup.add_argument("--apply", action="store_true")
     pause = commands.add_parser("pause")
     pause.add_argument("target_id")
     resume = commands.add_parser("resume")
@@ -73,7 +80,18 @@ def main():
             result = diagnose(args.config)
             print(json.dumps(result, indent=2))
             return 0 if result["ok"] else 1
-        engine = Engine(load_config(args.config))
+        config = load_config(args.config)
+        if args.command in {"backup", "restore", "cleanup"}:
+            from . import maintenance
+            if args.command == "backup":
+                result = maintenance.backup(config, args.directory, args.config)
+            elif args.command == "restore":
+                result = maintenance.restore(config, args.directory)
+            else:
+                result = maintenance.cleanup(config, args.older_than, args.apply)
+            print(json.dumps(result, indent=2))
+            return 0
+        engine = Engine(config)
         if args.command == "serve":
             serve(engine, args.host, args.port)
         elif args.command == "ingest":

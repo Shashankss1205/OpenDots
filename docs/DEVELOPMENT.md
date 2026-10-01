@@ -133,3 +133,28 @@ may set `model_calls_per_day` (default 100). Reservations are atomic and durable
 include failed real-provider attempts, and reset at UTC midnight. Exhausted work
 is blocked. These are invocation budgets: Codex CLI does not provide this runtime
 with an authoritative per-call bill, so dollar/token limits are not claimed.
+
+## Backup, restore and retention
+
+Stop the service before maintenance. `opendots backup /path/to/new-backup` copies
+one database using SQLite's backup API, its managed repositories/worktrees, and
+the config. The destination must be new and outside runtime storage and source
+workspaces. A SHA-256 inventory detects accidental backup changes. Backups contain
+local source and task data: keep them private and restore only trusted backups.
+External source repositories, planner credentials and installed dependencies are
+not included.
+
+`opendots restore /path/to/backup` verifies the inventory and database integrity,
+then restores only to the original database/workspace paths specified by the
+current config. Git worktree metadata contains absolute paths. Existing data is
+never overwritten: move damaged data aside first, including SQLite WAL/SHM files.
+Keep the config at its original location, or restore the saved config there
+before invoking the command. Restart normally to mark interrupted work for inspection.
+
+`opendots cleanup --older-than 30` previews terminal task workspaces eligible for
+archiving; `--apply` removes those worktrees. Active tasks and the currently
+accepted workspace are retained. Git branches, patches, database history and
+audit evidence remain. Uncommitted contents of removed worktrees are lost, so
+back up first if needed. An archived proposal can be inspected through its patch,
+but must be replanned before acceptance. This does not prune Git object history
+or database rows; their long-term archival remains a separate operational task.

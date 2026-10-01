@@ -110,6 +110,8 @@ class Workspaces:
             if proposal["base_ref"] != state.get("accepted_branch", state.get("source_base_ref", "main")):
                 raise ValueError("Proposal has a stale base; submit fresh work against the accepted base")
             directory = Path(proposal["workspace"])
+            if not directory.is_dir():
+                raise ValueError("Proposal workspace was archived; inspect its patch and submit fresh work")
             if git(directory, "rev-parse", "HEAD") != expected_commit or git(directory, "status", "--porcelain", "--untracked-files=all"):
                 raise ValueError("Proposal workspace changed after completion; inspect and replan")
             state.update(accepted_branch=proposal["branch"], accepted_commit=expected_commit, accepted_work_id=work_id)
