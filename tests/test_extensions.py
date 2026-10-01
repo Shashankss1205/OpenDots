@@ -275,7 +275,7 @@ print("PASS: sibling files, network, credentials isolated")
         engine.ingest({"type": "github.discussion.created", "payload": {"repo": "kubernetes/kubernetes"}})
         result = engine.drain()
         self.assertEqual(result["counts"], {"failed": 1})
-        self.assertEqual(len([r for r in engine.store.work_results(result["work"][0]["id"]) if r["tool"] == "run_check"]), 1)
+        self.assertEqual(len([r for r in engine.store.work_results(result["work"][0]["id"]) if r["tool"] == "run_check" and r["result"]["exit_code"] == 0]), 1)
         self.assertEqual(result["work"][0]["plan"]["actions"][-1]["tool"], "run_check")
 
     def test_required_check_obeys_approval_and_resume_without_replaying_notes(self):

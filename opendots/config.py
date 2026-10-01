@@ -34,6 +34,7 @@ class Config:
     sources: tuple[dict, ...] = ()
     sandbox: str = "bubblewrap"
     max_planning_rounds: int = 8
+    max_repair_attempts: int = 2
 
 
 def load_config(path: Path) -> Config:
@@ -107,4 +108,4 @@ def load_config(path: Path) -> Config:
     return Config(tuple(targets), database,
                   workers, backend, agent_timeout,
                   raw.get("codex_command", "codex"), raw.get("model"), tuple(schedules),
-                  tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)))
+                  tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)), int(raw.get("max_repair_attempts", 2)))

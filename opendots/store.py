@@ -43,6 +43,9 @@ class Store:
             if "planning_round" not in columns:
                 db.execute("ALTER TABLE work ADD COLUMN planning_round INTEGER NOT NULL DEFAULT 0")
 
+            if "repair_attempts" not in columns:
+                db.execute("ALTER TABLE work ADD COLUMN repair_attempts INTEGER NOT NULL DEFAULT 0")
+
     @contextmanager
     def connect(self):
         db = sqlite3.connect(self.path, timeout=15)
@@ -142,7 +145,7 @@ class Store:
 
     def work_results(self, work_id):
         with self.connect() as db:
-            return [json.loads(row[0]) for row in db.execute("SELECT detail FROM audit WHERE work_id=? AND kind='action_completed' ORDER BY id", (work_id,))]
+            return [json.loads(row[0]) for row in db.execute("SELECT detail FROM audit WHERE work_id=? AND kind IN ('action_completed','action_failed') ORDER BY id", (work_id,))]
 
     def set_workspace(self, work_id, workspace, branch, base_ref):
         with self.connect() as db:
@@ -158,6 +161,12 @@ class Store:
             # Notes remain task-local audit evidence until successful completion.
             # Failed/rejected/interrupted tasks cannot publish success claims to
             # memory that later tasks treat as validated target history.
+
+    def action_failed(self, work, index, result, tool):
+        with self.connect() as db:
+            db.execute("UPDATE work SET repair_attempts=repair_attempts+1 WHERE id=?", (work["id"],))
+            self.log(db, "action_failed", {"index": index, "tool": tool, "result": result}, work["target_id"], work["id"])
+        work["repair_attempts"] = work.get("repair_attempts", 0) + 1
 
     def await_approval(self, work, index, action, preview, context=None):
         with self.connect() as db:

@@ -10,7 +10,7 @@ import uuid
 
 from .agents import AgentRegistry, CodexAgent, DemoAgent, validate_plan
 from .store import Store
-from .tools import ToolRegistry
+from .tools import ToolRegistry, CheckFailed
 from .workspaces import Workspaces
 
 
@@ -133,6 +133,7 @@ class Engine:
                 if plan.get("outcome") == "blocked":
                     self.store.finish(work, "blocked", plan["summary"])
                     return
+                retry_check = False
                 for index in range(work["next_action"], len(plan["actions"])):
                     action = plan["actions"][index]
                     mode = target.policy.get(action["tool"], "deny")
@@ -147,8 +148,19 @@ class Engine:
                             or work.get("approval_context") != context):
                         self.store.await_approval(work, index, action, self.registry.preview(target, action), context)
                         return
-                    result = self.registry.execute(target, action)
+                    try:
+                        result = self.registry.execute(target, action)
+                    except CheckFailed as exc:
+                        self.store.action_failed(work, index, exc.result, action["tool"])
+                        provider = self.agent or self.agents.get(target.agent or self.config.backend)
+                        if isinstance(provider, DemoAgent) or work["repair_attempts"] > self.config.max_repair_attempts:
+                            raise
+                        retry_check = True
+                        break
                     self.store.action_done(work, index, result, action["tool"])
+                if retry_check:
+                    work.update(plan=None, next_action=0, approved_index=None)
+                    continue
                 if plan.get("outcome") != "needs_follow_up":
                     break
                 work.update(plan=None, next_action=0, approved_index=None)
