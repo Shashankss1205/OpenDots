@@ -130,3 +130,13 @@ class AuditFixTests(unittest.TestCase):
             engine.ingest({'type':'test'});result=engine.drain()
             self.assertEqual(result['counts'],{'completed':1})
             self.assertEqual(result['work'][0]['repair_attempts'],1)
+
+    def test_storage_cannot_be_nested_in_source(self):
+        from opendots.config import Config
+        from opendots.engine import Engine
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            target=Target('t','T','Test',root,(),{})
+            with self.assertRaisesRegex(ValueError,'outside'):
+                Engine(Config((target,),root/'.opendots/state.db'))
+            self.assertFalse((root/'.opendots').exists())
