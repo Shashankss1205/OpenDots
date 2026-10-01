@@ -35,7 +35,13 @@
     <div class="header-row"><div><h1>Your goals. <span>Always moving.</span></h1><p class="subtitle">Follow the signals. Review the work. Decide what happens next.</p></div><button id="sample" class="primary" hidden>Run five-event demo</button></div>
     <div class="notice"><span id="backend">Loading backend</span><span>Actions follow your configured policies</span></div>
   </header>
-  <div id="error" role="alert" hidden></div>
+  <div id="connection-warning" role="status" hidden>Connection lost. Showing the last received state; actions are temporarily unavailable.</div>
+  <div id="error" role="alert" hidden><span id="error-message"></span><button id="dismiss-error" class="reject" type="button" aria-label="Dismiss error">Dismiss</button></div>
+<section id="focus" class="goal-workspace" aria-labelledby="goal-title">
+  <div class="goal-heading"><div><div class="eyebrow">GOAL IN FOCUS</div><h2 id="goal-title">Loading your workspace…</h2><p id="goal-meta" class="muted">Waiting for the local runtime</p></div><label class="goal-picker">Agent<select id="goal-select" aria-label="Choose an agent" disabled><option>Loading agents…</option></select></label></div>
+  <div class="focus-grid"><div class="focus-context"><article class="focus-card"><div class="section-heading"><h3>Incoming event</h3><a class="text-link" href="#event-stream">All events ↗</a></div><div id="focus-event"><p class="muted">Waiting for runtime data.</p></div></article><article class="focus-card"><div class="section-heading"><h3>Agent activity</h3><a class="text-link" href="#timeline">Activity ↗</a></div><div id="focus-activity"><p class="muted">Waiting for runtime data.</p></div></article></div><article class="focus-card focus-review-card"><div class="section-heading"><h3>Review proposed action</h3><a class="text-link" href="#approvals">All reviews ↗</a></div><div id="focus-review"><p class="muted">Waiting for runtime data.</p></div></article></div>
+  <ol class="journey" aria-label="How work moves through OpenDots"><li><span>01</span> Receive an event</li><li><span>02</span> Agent investigates</li><li><span>03</span> Apply your policy</li><li><span>04</span> Inspect results</li></ol>
+</section>
   <section class="stats" aria-label="System statistics">
     <div><small>EVENTS RECEIVED</small><strong id="events">—</strong><span>Signals in your workspace</span></div>
     <div><small>CONFIGURED AGENTS</small><strong id="target-count">—</strong><span>Persistent goals to pursue</span></div>

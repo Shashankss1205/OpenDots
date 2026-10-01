@@ -1,18 +1,33 @@
 const $ = (id) => document.getElementById(id);
 let current = null;
+let selectedGoal = null;
+const pendingDecisions = new Set();
+const submittedDecisions = new Set();
+let sendingEvent = false, runningDemo = false;
 const el = (tag, className, text) => {const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node;};
 async function request(path, body) {
-  const response = await fetch(path, body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json', 'X-OpenDots-Request': 'dashboard'}, body: JSON.stringify(body)});
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-  return data;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const options = body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json', 'X-OpenDots-Request': 'dashboard'}, body: JSON.stringify(body)};
+    const response = await fetch(path, {...options, signal: controller.signal});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+    return data;
+  } finally { clearTimeout(timeout); }
 }
-function showError(error) {$('error').textContent = error.message; $('error').hidden = false;}
+function showError(error) {$('error-message').textContent = error.message; $('error').hidden = false;}
+$('dismiss-error').addEventListener('click', () => { $('error').hidden = true; });
 function render(data) {
   current = data;
+  const liveTokens = new Set(data.work.filter(w => w.status === 'waiting_approval').map(w => w.approval_token));
+  for (const token of submittedDecisions) if (!liveTokens.has(token)) submittedDecisions.delete(token);
+  document.body.dataset.connection = 'online';
+  $('connection-warning').hidden = true;
+  renderFocus(data);
   renderListeners(data.listeners);renderNotifications(data.notifications);renderProviders(data.providers);
   if (eventLive) renderEventStream(data.event_stream);
-  $('connection').textContent = 'Connected to local workers';
+  $('connection').textContent = 'Runtime connected';
   $('backend').textContent = data.backend === 'demo' ? 'DEMO · deterministic recipes' :
     data.backend === 'codex' ? 'CODEX · CLI planning backend' : `${data.backend} · registered planning provider`;
   $('sample').hidden = data.backend !== 'demo' || !data.targets.some(t=>t.id==='kubernetes') || !data.targets.some(t=>t.id==='react');
@@ -20,12 +35,13 @@ function render(data) {
   $('completed').textContent = data.counts.completed || 0; $('waiting').textContent = data.counts.waiting_approval || 0;
   $('worker-count').textContent = `${data.workers} configurable worker slots`;
   const grid = $('target-grid'); grid.replaceChildren();
+  if (!data.targets.length) grid.append(el('div','empty','No agents configured. Run opendots init with your project and goal to get started.'));
   for (const target of data.targets) {
     const jobs = data.work.filter(w => w.target_id === target.id);
     const waiting = jobs.some(w => w.status === 'waiting_approval');
     const running = jobs.some(w => w.status === 'running');
     const card = el('article','target-card'), top = el('div','target-top');
-    top.append(el('div','target-icon','◎')); const label = el('div'); label.append(el('div','target-title',target.name || target.id),el('div','target-id',target.id)); top.append(label,el('span',`badge ${waiting ? 'review' : ''}`,waiting ? 'NEEDS REVIEW' : running ? 'WORKING' : 'WATCHING'));
+    top.append(el('div','target-icon','◎')); const label = el('div'); label.append(el('div','target-title',target.name || target.id),el('div','target-id',target.id)); top.append(label,el('span',`badge ${waiting ? 'review' : ''}`,target.state.paused ? 'PAUSED' : waiting ? 'NEEDS REVIEW' : running ? 'WORKING' : 'READY'));
     card.append(top,el('p',null,target.objective || 'Target removed from configuration'));
     if(target.state.last_summary)card.append(el('p','target-latest',target.state.last_summary));
     const bottom = el('div','target-bottom');
@@ -68,7 +84,7 @@ function render(data) {
       meta.append(el('span',null,policy),el('span',null,`${work.planning_round||0} planning rounds`));
       if (artifact) {
         meta.append(el('span','commit-label',`Git ${artifact.commit.slice(0,8)}`));
-        if(artifact.changed){const button=el('button','patch-button','View retained patch ↗');button.addEventListener('click',async()=>{try{const result=await request(`/api/work/${work.id}/patch`);$('patch-title').textContent=`${target?.name||work.target_id} · work #${work.id}`;$('patch-branch').textContent=result.branch;$('patch-content').textContent=result.patch||'No changes in this work item.';$('evidence-dialog').showModal();}catch(error){showError(error);}});meta.append(button);}
+        if(artifact.changed){const button=el('button','patch-button','View retained patch ↗');button.addEventListener('click',async()=>{try{const result=await request(`/api/work/${work.id}/patch`);$('patch-title').textContent=`${target?.name||work.target_id} · work #${work.id}`;$('patch-branch').textContent=result.branch;renderDiff($('patch-content'),result.patch||'No changes in this work item.');$('evidence-dialog').showModal();}catch(error){showError(error);}});meta.append(button);}
       }
       card.append(meta);workflows.append(card);
     }
@@ -86,19 +102,7 @@ function render(data) {
     const reviews = $('review-list'); reviews.dataset.key = reviewKey; reviews.replaceChildren();
     if (!approvals.length) reviews.append(el('div','empty','No actions awaiting review. New proposals will appear here with the exact change.'));
     for (const work of approvals) {
-      const action = work.plan.actions[work.approval_index];
-      const audit = data.audit.find(a=>a.work_id===work.id && a.kind==='approval_requested' && a.detail.index===work.approval_index);
-      const card=el('article','review-card'),top=el('div','review-top'),label=el('div');
-      label.append(el('h3',null,`${work.target_id} · ${action.tool}`),el('p',null,work.plan.summary));
-      const buttons=el('div');
-      for (const [approved,name] of [[true,'Approve action'],[false,'Reject']]) {
-        const button=el('button',approved?'approve':'reject',name);
-        button.addEventListener('click',async()=>{button.disabled=true;try{await request(`/api/work/${work.id}/decision`,{approved,approval_token:work.approval_token});await refresh();}catch(e){showError(e);button.disabled=false;}});buttons.append(button);
-      }
-      top.append(label,buttons);card.append(top);
-      const preview = audit?.detail.preview;
-      if(work.branch)card.append(el('p',null,`Task branch: ${work.branch}`));
-      card.append(el('pre',null,preview?.diff || JSON.stringify(preview || action.args,null,2)));reviews.append(card);
+      reviews.append(reviewCard(work, data));
     }
   }
   const timeline=$('audit');
@@ -114,9 +118,20 @@ function render(data) {
   if(!data.audit.length)timeline.append(el('div','empty','Waiting for an event. Send a request or connect an event source.'));
   const queue=$('queue');queue.replaceChildren();
   for(const work of data.work.slice(0,8)){const row=el('div','queue-row');row.append(el('span',null,`#${work.id} · ${work.target_id}`),el('span',`queue-status ${work.status}`,work.status.replaceAll('_',' ')));queue.append(row);}
+  updateActionAvailability();
 }
 let loading=false;
-async function refresh(){if(loading)return;loading=true;try{render(await request('/api/state'));}catch(e){$('connection').textContent='Connection lost';showError(e);}finally{loading=false;}}
+async function refresh(){
+  if(loading)return;loading=true;
+  try{render(await request('/api/state'));}
+  catch(e){
+    document.body.dataset.connection='offline';
+    $('connection').textContent='Runtime disconnected';
+    $('connection-warning').hidden=false;
+    if(!current){$('goal-title').textContent='Connect your local runtime';$('goal-meta').textContent='Start opendots serve, then this page will reconnect automatically.';}
+    updateActionAvailability();
+  }finally{loading=false;}
+}
 function suggestEventFields(){
   const target=current?.targets.find(t=>t.id===$('event-target').value);
   const rules=target?.subscriptions||[];
@@ -136,9 +151,10 @@ function eventFromForm(){
   return event;
 }
 $('preview-event').addEventListener('click',()=>{try{$('event-preview').textContent=JSON.stringify(eventFromForm(),null,2);$('event-preview').hidden=false;}catch(e){showError(e);}});
-$('event-form').addEventListener('submit',async(event)=>{event.preventDefault();const button=event.submitter;button.disabled=true;try{const result=await request('/api/events',eventFromForm());$('error').hidden=true;$('event-result').textContent=`Event ${result.event_id}: `+(result.duplicate?'already received.':result.queued?`${result.queued} candidate task(s) queued. Relevance may still be pending.`:'recorded with no work queued. See its routing reasons in Received events.');eventLive=true;await refresh();}catch(e){showError(e);}finally{button.disabled=false;}});
+$('event-form').addEventListener('submit',async(event)=>{event.preventDefault();if(sendingEvent)return;const button=event.submitter;sendingEvent=true;button.disabled=true;try{const result=await request('/api/events',eventFromForm());$('error').hidden=true;$('event-result').textContent=`Event ${result.event_id}: `+(result.duplicate?'already received.':result.queued?`${result.queued} candidate task(s) queued. Relevance may still be pending.`:'recorded with no work queued. See its routing reasons in Received events.');eventLive=true;await refresh();}catch(e){showError(e);}finally{sendingEvent=false;updateActionAvailability();}});
 $('close-evidence').addEventListener('click',()=>$('evidence-dialog').close());
 $('sample').addEventListener('click',async()=>{
+  if(runningDemo)return;runningDemo=true;
   const button=$('sample');button.disabled=true;
   try {
     // Demo target IDs live only in the sample fixture, never in routing/scheduling logic.
@@ -152,7 +168,7 @@ $('sample').addEventListener('click',async()=>{
     ];
     for(const example of examples)await request('/api/events',{...example,id:crypto.randomUUID(),source:'demo'});
     $('error').hidden=true;await refresh();
-  }catch(e){showError(e);}finally{button.disabled=false;}
+  }catch(e){showError(e);}finally{runningDemo=false;updateActionAvailability();}
 });
 let eventLive=true, eventBefore=null, eventQuery='';
 function renderListeners(data){
@@ -186,7 +202,7 @@ $('event-search-form').addEventListener('submit',async event=>{event.preventDefa
 $('events-older').addEventListener('click',async()=>{eventLive=false;try{await loadEvents(eventBefore);}catch(e){showError(e);}});
 $('event-live').addEventListener('click',()=>{eventLive=true;eventQuery='';$('event-search').value='';refresh();});
 $('close-event').addEventListener('click',()=>$('event-dialog').close());
-refresh();setInterval(refresh,1000);
+
 
 function renderNotifications(data){
   if(!data)return;
@@ -203,3 +219,116 @@ function renderProviders(data){
   for(const provider of data.providers){const card=el('article','listener-card');
     card.append(el('h3',null,`${provider.id} · ${provider.kind}`),el('p',null,`Model: ${provider.model||'provider default'} · ${provider.status}`),el('p','muted',`Targets: ${provider.targets.join(', ')||'none'} · Plugin: ${provider.plugin}`));root.append(card);}
 }
+
+// The overview is derived entirely from the same persisted state as the full lists.
+function renderFocus(data) {
+  const targets = data.targets;
+  if (!targets.some(t => t.id === selectedGoal)) {
+    const waiting = data.work.find(w => w.status === 'waiting_approval');
+    selectedGoal = targets.find(t => t.id === waiting?.target_id)?.id || targets[0]?.id || null;
+  }
+  const picker = $('goal-select');
+  const optionsKey = JSON.stringify(targets.map(t => [t.id, t.name]));
+  if (picker.dataset.key !== optionsKey) {
+    picker.dataset.key = optionsKey;
+    picker.replaceChildren(...targets.map(t => { const option = el('option', null, t.name || t.id); option.value = t.id; return option; }));
+    if (!targets.length) picker.append(el('option', null, 'No agents configured'));
+  }
+  picker.disabled = !targets.length;
+  if (selectedGoal) picker.value = selectedGoal;
+  const target = targets.find(t => t.id === selectedGoal);
+  $('goal-title').textContent = target?.objective || 'Give your first agent a goal';
+  $('goal-meta').textContent = target ? `${target.name || target.id} · ${target.state.paused ? 'Paused' : 'Configured agent'} · ${target.state.completed || 0} completed` : 'Run opendots init with your project and goal, then start the runtime.';
+  const jobs = data.work.filter(w => w.target_id === selectedGoal);
+  const waiting = jobs.find(w => w.status === 'waiting_approval');
+  const recentEvent = data.event_stream?.events.find(e => e.decisions.some(d => d.target_id === selectedGoal && d.status !== 'filtered'));
+  const activity = data.audit.filter(a => a.target_id === selectedGoal && a.kind !== 'target_configuration_changed').slice(0, 3);
+  const key = JSON.stringify([selectedGoal, recentEvent, activity, waiting?.approval_token, target?.state.paused, jobs[0]?.status, jobs[0]?.summary, jobs[0]?.error]);
+  if ($('focus').dataset.key === key) return;
+  $('focus').dataset.key = key;
+  const eventRoot = $('focus-event'); eventRoot.replaceChildren();
+  if (recentEvent) {
+    eventRoot.append(el('span', 'queue-status', recentEvent.source), el('h4', null, recentEvent.title || recentEvent.type), el('p', 'muted', recentEvent.type));
+    const inspect = el('button', 'patch-button', 'Inspect event →');
+    inspect.addEventListener('click', async () => {try { $('event-detail').textContent = JSON.stringify(await request('/api/events/' + encodeURIComponent(recentEvent.id)), null, 2); $('event-dialog').showModal(); } catch(e) { showError(e); }});
+    eventRoot.append(inspect);
+  } else eventRoot.append(el('p', 'empty-copy', target ? 'No matching event in the recent stream. Send a request or inspect the full event history.' : 'Connect an agent to start receiving work.'));
+  const activityRoot = $('focus-activity'); activityRoot.replaceChildren();
+  if (!activity.length) activityRoot.append(el('p', 'empty-copy', target?.state.paused ? 'This agent is paused.' : 'Work will appear here when this agent receives an event.'));
+  for (const item of activity) {
+    const row = el('div', 'focus-activity-row');
+    row.append(el('span', 'activity-marker', '•'), el('span', null, item.kind.replaceAll('_', ' ')), el('time', 'muted', new Date(item.at * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})));
+    activityRoot.append(row);
+  }
+  const latestSummary = jobs[0]?.error || jobs[0]?.summary;
+  if (latestSummary) activityRoot.append(el('p', 'empty-copy', latestSummary));
+  const reviewRoot = $('focus-review'); reviewRoot.replaceChildren();
+  if (waiting) reviewRoot.append(reviewCard(waiting, data, true));
+  else {
+    reviewRoot.append(el('div', 'review-clear-icon', '✓'), el('h4', null, 'No decision waiting'), el('p', 'empty-copy', 'Actions that need your permission will appear here with the exact proposal.'));
+    const link = el('a', 'text-link', 'Inspect recent work →'); link.href = '#workflows'; reviewRoot.append(link);
+  }
+}
+$('goal-select').addEventListener('change', () => { selectedGoal = $('goal-select').value; if (current) { renderFocus(current); updateActionAvailability(); } });
+
+function renderDiff(root, text) {
+  root.replaceChildren();
+  for (const line of text.split('\n')) {
+    const kind = line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@') || line.startsWith('diff ') ? 'diff-heading' : line.startsWith('+') ? 'diff-add' : line.startsWith('-') ? 'diff-remove' : 'diff-context';
+    root.append(el('span', `diff-line ${kind}`, line + '\n'));
+  }
+}
+function reviewCard(work, data, compact = false) {
+  const action = work.plan?.actions?.[work.approval_index];
+  const card = el('article', compact ? 'review-card compact' : 'review-card');
+  card.dataset.workId = work.id;
+  if (!action) { card.append(el('p', 'empty-copy', 'The action details are unavailable. Refresh before reviewing.')); return card; }
+  const audit = data.audit.find(a => a.work_id === work.id && a.kind === 'approval_requested' && a.detail.index === work.approval_index);
+  const title = el('div', 'review-top');
+  title.append(el('h3', null, `${work.target_id} · ${action.tool}`), el('span', 'queue-status waiting_approval', 'Approval required'));
+  card.append(title, el('p', null, work.plan.summary));
+  const preview = audit?.detail.preview;
+  const diff = el('pre', 'review-diff');
+  if (preview?.diff) renderDiff(diff, preview.diff);
+  else diff.textContent = JSON.stringify(preview || action.args, null, 2);
+  card.append(diff);
+  if (work.branch) card.append(el('p', 'review-branch', `Task branch: ${work.branch}`));
+  card.append(el('p', 'review-policy', 'Approves only this action. Further actions and checks follow your configured policy.'));
+  const buttons = el('div', 'review-actions');
+  for (const [approved, name] of [[true, 'Approve action'], [false, 'Reject']]) {
+    const button = el('button', approved ? 'approve' : 'reject', name);
+    button.type = 'button'; button.dataset.decisionId = String(work.id); button.dataset.approvalToken = work.approval_token;
+    button.addEventListener('click', async () => {
+      if (pendingDecisions.has(work.id) || submittedDecisions.has(work.approval_token) || document.body.dataset.connection !== 'online') return;
+      pendingDecisions.add(work.id); updateActionAvailability();
+      try {
+        await request(`/api/work/${work.id}/decision`, {approved, approval_token: work.approval_token});
+        submittedDecisions.add(work.approval_token);
+        // Invalidate both copies; the next successful state read is authoritative.
+        delete $('review-list').dataset.key; delete $('focus').dataset.key;
+        await refresh();
+      } catch(e) { showError(e); }
+      finally { pendingDecisions.delete(work.id); updateActionAvailability(); }
+    });
+    buttons.append(button);
+  }
+  card.append(buttons); return card;
+}
+function updateActionAvailability() {
+  const offline = document.body.dataset.connection !== 'online';
+  document.querySelectorAll('[data-decision-id]').forEach(button => { button.disabled = offline || pendingDecisions.has(Number(button.dataset.decisionId)) || submittedDecisions.has(button.dataset.approvalToken); });
+  $('event-form').querySelector('[type="submit"]').disabled = offline || sendingEvent || !current?.targets.length;
+  $('sample').disabled = offline || runningDemo;
+}
+
+// Keep anchor navigation honest for mouse, keyboard, direct links and scrolling.
+function updateNavigation() {
+  const links = [...document.querySelectorAll('nav a')];
+  const visible = links.map(link => ({link, top: document.querySelector(link.getAttribute('href')).getBoundingClientRect().top})).filter(item => item.top <= 180).sort((a, b) => b.top - a.top);
+  const active = visible[0]?.link || links[0];
+  for (const link of links) { link.classList.toggle('selected', link === active); if (link === active) link.setAttribute('aria-current', 'location'); else link.removeAttribute('aria-current'); }
+}
+let navigationFrame = false;
+window.addEventListener('scroll', () => { if (navigationFrame) return; navigationFrame = true; requestAnimationFrame(() => {updateNavigation(); navigationFrame = false;}); }, {passive: true});
+window.addEventListener('hashchange', updateNavigation);
+updateNavigation(); updateActionAvailability(); refresh(); setInterval(refresh, 1000);
