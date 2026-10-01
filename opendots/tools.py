@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 
 
 class CheckFailed(RuntimeError):
@@ -36,29 +37,69 @@ def confined_path(root: Path, relative: str) -> Path:
     return candidate
 
 
-def bounded_process(command, cwd, timeout, stdin=None, env=None, output_path=None):
+def bounded_process(command, cwd, timeout, stdin=None, env=None, output_path=None, output_limit=16_777_216):
     # Trusted argv, never shell interpolation. Kill descendants on timeout on POSIX.
     if sys.platform == "linux":
         command = [sys.executable, "-I", "-B", str(Path(__file__).with_name("process_guard.py")), str(os.getpid()), *command]
     with (open(output_path, "w+b") if output_path else tempfile.TemporaryFile(mode="w+b")) as output:
         process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-                                   stdout=output, stderr=subprocess.STDOUT, start_new_session=os.name == "posix", env=env)
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=os.name == "posix", env=env)
+        overflow = threading.Event()
+        def terminate():
+            try:
+                if os.name == "posix":
+                    os.killpg(process.pid, signal.SIGTERM if sys.platform == "linux" else signal.SIGKILL)
+                else:
+                    process.kill()
+            except ProcessLookupError:
+                pass
+        def collect():
+            total = 0
+            while True:
+                chunk = process.stdout.read(65536)
+                if not chunk:
+                    break
+                remaining = max(0, output_limit - total)
+                output.write(chunk[:remaining])
+                total += len(chunk)
+                if total > output_limit:
+                    overflow.set()
+                    terminate()
+        def feed():
+            try:
+                process.stdin.write(stdin.encode())
+                process.stdin.flush()
+            except (BrokenPipeError, OSError):
+                pass
+            finally:
+                process.stdin.close()
+        reader = threading.Thread(target=collect, daemon=True)
+        reader.start()
+        writer = None
+        if stdin is not None:
+            writer = threading.Thread(target=feed, daemon=True)
+            writer.start()
+        timed_out = False
         try:
-            process.communicate(stdin.encode() if stdin is not None else None, timeout=timeout)
+            process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            if sys.platform == "linux":
-                # Let the Linux supervisor stop its command's separate group.
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.communicate(timeout=1)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-            elif os.name == "posix":
-                os.killpg(process.pid, signal.SIGKILL)
-            else:
+            timed_out = True
+            terminate()
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
                 process.kill()
-            process.wait()
-            raise RuntimeError(f"Tool timed out after {timeout}s") from None
+                process.wait()
+        reader.join(timeout=2)
+        if writer:
+            writer.join(timeout=1)
+        if reader.is_alive():
+            raise RuntimeError("Command left an open output stream after exit")
+        process.stdout.close()
+        if timed_out:
+            raise RuntimeError(f"Tool timed out after {timeout}s")
+        if overflow.is_set():
+            raise RuntimeError(f"Tool output exceeded {output_limit} bytes")
         output.seek(0)
         text = output.read(65536).decode("utf-8", errors="replace")
         return process.returncode, text

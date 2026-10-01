@@ -194,3 +194,12 @@ class AuditFixTests(unittest.TestCase):
                 validate_config({'targets':[],key:value})
         with self.assertRaisesRegex(ValueError,'checks.bad'):
             validate_config({'targets':[{'id':'t','name':'T','objective':'O','workspace':'.','checks':{'bad':'shell string'}}]})
+
+    def test_process_output_is_bounded_while_captured(self):
+        import sys
+        from opendots.tools import bounded_process
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/'output'
+            with self.assertRaisesRegex(RuntimeError,'output exceeded'):
+                bounded_process([sys.executable,'-c','import sys; sys.stdout.write("x"*1000000)'],directory,5,output_path=output,output_limit=10000)
+            self.assertLessEqual(output.stat().st_size,10000)
