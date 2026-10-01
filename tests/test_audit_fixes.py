@@ -79,3 +79,13 @@ class AuditFixTests(unittest.TestCase):
             state=engine.snapshot()
             self.assertEqual(sum(w['status']=='waiting_approval' for w in state['work']),1)
             self.assertTrue(any(a['kind']=='approval_requested' for a in state['audit']))
+
+    def test_github_comment_preserves_comment_and_issue(self):
+        from opendots.sources import normalize_github
+        event=normalize_github('issue_comment', {'action':'created','issue':{'number':7,'body':'issue'},
+            'comment':{'id':9,'body':'comment','html_url':'https://example.test/comment'},
+            'sender':{'login':'owner'}}, 'delivery')
+        self.assertEqual(event['payload']['body'],'comment')
+        self.assertEqual(event['payload']['issue_body'],'issue')
+        self.assertEqual(event['payload']['number'],7)
+        self.assertEqual(event['payload']['actor'],'owner')
