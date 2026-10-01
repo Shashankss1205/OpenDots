@@ -110,3 +110,23 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(len(config.targets),2)
             self.assertTrue(all(t.workspace.is_dir() for t in config.targets))
             with self.assertRaises(ValueError): initialize(path.parent)
+
+    def test_failed_check_is_returned_to_bounded_repair_planner(self):
+        from opendots.config import Config
+        from opendots.engine import Engine
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); source=root/'source';source.mkdir();(source/'value').write_text('bad')
+            target=Target('t','T','Repair',source,({'types':['test']},),{'write_file':'auto','run_check':'auto'},
+                checks={'valid':['{python}','-c',"from pathlib import Path; assert Path('value').read_text() == 'good'"]},required_checks=('valid',))
+            class Planner:
+                def plan(self,target,event,state):
+                    results=state['task_action_results']
+                    actions=[]
+                    if results:
+                        assert results[-1]['result']['exit_code'] != 0
+                        actions=[{'tool':'write_file','args':{'path':'value','content':'good','expected_sha256':digest('bad')}}]
+                    return {'summary':'Validate','actions':actions+[{'tool':'run_check','args':{'name':'valid'}}]}
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'),agent=Planner())
+            engine.ingest({'type':'test'});result=engine.drain()
+            self.assertEqual(result['counts'],{'completed':1})
+            self.assertEqual(result['work'][0]['repair_attempts'],1)

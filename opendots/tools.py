@@ -10,6 +10,12 @@ import sys
 import tempfile
 
 
+class CheckFailed(RuntimeError):
+    def __init__(self, result):
+        self.result = result
+        super().__init__("Configured check failed: " + json.dumps(result))
+
+
 def digest(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -186,7 +192,7 @@ class ToolRegistry:
         code, output = bounded_process(command, target.workspace, 30)
         result = {"name": args["name"], "exit_code": code, "output": output}
         if code:
-            raise RuntimeError("Configured check failed: " + json.dumps(result))
+            raise CheckFailed(result)
         after = workspace_fingerprint(target.workspace)
         if before != after:
             raise RuntimeError("Configured check changed workspace inputs; successful exit lacks stable validation evidence")
