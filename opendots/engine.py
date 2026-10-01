@@ -108,6 +108,9 @@ class Engine:
         try:
             target = self.workspaces.prepare(target, work)
             while True:
+                if self.stop_event.is_set():
+                    self.store.finish(work, "interrupted", "Service stopped between bounded actions; inspect before retry")
+                    return
                 if work["plan"]:
                     plan = validate_plan(json.loads(work["plan"]), target, self.registry)
                     enforced = self._require_checks(target, work, plan)
@@ -139,6 +142,9 @@ class Engine:
                     return
                 retry_check = False
                 for index in range(work["next_action"], len(plan["actions"])):
+                    if self.stop_event.is_set():
+                        self.store.finish(work, "interrupted", "Service stopped between bounded actions; inspect before retry")
+                        return
                     action = plan["actions"][index]
                     mode = target.policy.get(action["tool"], "deny")
                     if mode == "deny":
