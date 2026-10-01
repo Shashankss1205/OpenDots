@@ -172,3 +172,17 @@ class AuditFixTests(unittest.TestCase):
                 start=time.monotonic();sources.poll_due(lambda event:None,asynchronous=True)
                 self.assertLess(time.monotonic()-start,.5)
             finally: release.set();sources.close()
+
+    def test_jsonl_skips_poison_and_detects_rotation(self):
+        import json, os
+        from opendots.sources import JSONLSource
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'events.jsonl'
+            path.write_text('invalid\n'+json.dumps({'type':'one'})+'\n')
+            source=JSONLSource({'id':'file','path':str(path)})
+            events,state=source.poll({})
+            self.assertEqual(events[0]['type'],'one');self.assertEqual(len(state['rejected']),1)
+            replacement=path.with_suffix('.new');replacement.write_text(json.dumps({'type':'replacement','payload':{'long':'x'*100}})+'\n')
+            os.replace(replacement,path)
+            events,state=source.poll(state)
+            self.assertEqual(events[0]['type'],'replacement')

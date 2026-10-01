@@ -95,27 +95,46 @@ class JSONLSource:
         if not self.path.exists():
             return [], state
         offset = int(state.get("offset", 0))
-        size = self.path.stat().st_size
-        if size < offset:
+        stat = self.path.stat()
+        identity = [stat.st_dev, stat.st_ino]
+        size = stat.st_size
+        if size < offset or (state.get("identity") and state["identity"] != identity):
             offset = 0
         events = []
+        rejected = []
+        batch_size = max(1, int(self.config.get("batch_size", 1000)))
         with self.path.open("rb") as handle:
             handle.seek(offset)
-            while True:
+            for _ in range(batch_size):
                 start = handle.tell()
                 line = handle.readline(256_001)
                 if len(line) > 256_000:
-                    raise ValueError("JSONL event line exceeds size limit")
+                    # Consume this complete oversized record without retaining it in memory.
+                    while line and not line.endswith(b"\n"):
+                        line = handle.readline(256_001)
+                    if not line:
+                        offset = start
+                        break
+                    rejected.append({"offset":start,"error":"Record exceeds 256000 bytes"})
+                    offset = handle.tell()
+                    continue
                 if not line or not line.endswith(b"\n"):
                     # An incomplete append is retried, not acknowledged.
                     offset = start
                     break
-                event = json.loads(line)
+                try:
+                    event = json.loads(line)
+                    if not isinstance(event, dict) or not isinstance(event.get("type"), str) or not event["type"]:
+                        raise ValueError("Record needs a nonempty type")
+                except (ValueError, UnicodeDecodeError) as exc:
+                    rejected.append({"offset":start,"sha256":hashlib.sha256(line).hexdigest(),"error":str(exc)[:300]})
+                    offset = handle.tell()
+                    continue
                 event.setdefault("id", "jsonl:" + self.config["id"] + ":" + str(start) + ":" + hashlib.sha256(line).hexdigest())
                 event.setdefault("source", "file")
                 events.append(event)
                 offset = handle.tell()
-        return events, {**state, "offset": offset}
+        return events, {**state, "offset": offset, "identity": identity, "rejected": rejected}
 
 
 class SourceRegistry:
@@ -166,11 +185,19 @@ class SourceRegistry:
                 self.instances[source_id] = self.factories[config["kind"]](config)
             events, next_state = self.instances[source_id].poll(state)
             for event in events:
-                ingest(event)
+                try:
+                    ingest(event)
+                except (ValueError, TypeError) as exc:
+                    if config["kind"] != "jsonl":
+                        raise
+                    with self.store.connect() as db:
+                        self.store.log(db, "source_record_rejected", {"source":source_id,"event":event,"error":str(exc)[:1000]})
             next_state["next_poll"] = now + max(1, int(next_state.get("poll_interval", config.get("interval_seconds", 5))))
             with self.store.connect() as db:
                 db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state",
                            (source_id, json.dumps(next_state)))
+                for record in next_state.pop("rejected", []):
+                    self.store.log(db, "source_record_rejected", {"source":source_id, **record})
                 self.store.log(db, "source_polled", {"source": source_id, "events": len(events)})
         except Exception as exc:
             state["next_poll"] = now + max(30, int(config.get("interval_seconds", 60)))
