@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import threading
 from urllib.parse import urlparse
+from .store import CapacityError
 
 
 WEB = Path(__file__).parent / "web"
@@ -121,6 +122,8 @@ def make_server(engine, host="127.0.0.1", port=8765):
                     self.send(200, engine.store.decide(work_id, body["approved"], body["approval_token"]))
                 else:
                     self.send(404, {"error": "Not found"})
+            except CapacityError as exc:
+                self.send(429, {"error": str(exc)})
             except (ValueError, TypeError, KeyError) as exc:
                 self.send(400, {"error": str(exc)})
 

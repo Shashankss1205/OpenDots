@@ -99,3 +99,11 @@ Custom tools can pass `schema={"type":"object", ...}` to `register` instead of
 string-only `arg_names`. Supported schema types are object, array, string, boolean,
 integer, number and null, with required fields, enums, numeric bounds and strict
 extra-field rejection. Existing string argument registrations remain compatible.
+
+## Queue limits
+
+`max_queued_per_target` and `max_events_per_minute` default to 1000 and are
+configurable. Capacity failures do not acknowledge events; HTTP returns 429 and
+source cursors retry. `priority_aging_seconds` (default 60) raises waiting work
+priority over time to avoid starvation. Pause/resume and cancel are available in
+the CLI/API; cancellation of running work occurs between bounded actions.

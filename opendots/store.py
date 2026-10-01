@@ -7,9 +7,14 @@ import sqlite3
 import time
 
 
+class CapacityError(RuntimeError):
+    pass
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS targets(id TEXT PRIMARY KEY, state TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, body TEXT NOT NULL, created REAL NOT NULL);
+CREATE INDEX IF NOT EXISTS event_time ON events(created);
 CREATE TABLE IF NOT EXISTS work(
  id INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL REFERENCES events(id),
  target_id TEXT NOT NULL REFERENCES targets(id), priority INTEGER NOT NULL,
@@ -32,6 +37,9 @@ CREATE TABLE IF NOT EXISTS source_state(id TEXT PRIMARY KEY, state TEXT NOT NULL
 class Store:
     def __init__(self, path: Path):
         self.path = Path(path)
+        self.queue_limit = 1000
+        self.event_rate_limit = 1000
+        self.aging_seconds = 60
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
@@ -92,6 +100,13 @@ class Store:
                 if found["body"] != body:
                     raise ValueError("An event ID cannot be reused with a different payload")
                 return {"event_id": event["id"], "duplicate": True, "queued": 0}
+            recent = db.execute("SELECT count(*) FROM events WHERE created>?", (now-60,)).fetchone()[0]
+            if recent >= self.event_rate_limit:
+                raise CapacityError("Event rate limit reached; retry later")
+            for target_id, _, accepted, _ in matches:
+                queued = db.execute("SELECT count(*) FROM work WHERE target_id=? AND status='queued'", (target_id,)).fetchone()[0]
+                if accepted and queued >= self.queue_limit:
+                    raise CapacityError(f"Queue limit reached for {target_id}; retry after capacity is available")
             db.execute("INSERT INTO events VALUES(?,?,?)", (event["id"], body, now))
             queued = 0
             self.log(db, "event_received", {"id": event["id"], "type": event["type"]})
@@ -125,8 +140,8 @@ class Store:
              (w.status='ready' OR (w.status='queued'  AND NOT EXISTS
               (SELECT 1 FROM work active WHERE active.target_id=w.target_id
                AND active.status IN ('running','waiting_approval','ready'))))
-             ORDER BY CASE WHEN w.status='ready' THEN 0 ELSE 1 END, w.priority DESC,w.id LIMIT 1""",
-                             tuple(target_ids)).fetchone()
+             ORDER BY CASE WHEN w.status='ready' THEN 0 ELSE 1 END, min(100,w.priority + CAST((?-w.created)/? AS INTEGER)) DESC,w.id LIMIT 1""",
+                             (*tuple(target_ids), time.time(), self.aging_seconds)).fetchone()
             if row is None:
                 return None
             db.execute("UPDATE work SET status='running',updated=? WHERE id=?", (time.time(), row["id"]))

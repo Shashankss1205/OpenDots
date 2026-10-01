@@ -49,6 +49,9 @@ class Engine:
                 raise ValueError("Runtime database and managed storage must be outside source workspaces")
         self.targets = {target.id: target for target in config.targets}
         self.store = Store(config.database)
+        self.store.queue_limit = config.max_queued_per_target
+        self.store.event_rate_limit = config.max_events_per_minute
+        self.store.aging_seconds = config.priority_aging_seconds
         self.store.register_targets(config.targets)
         self.registry = registry or ToolRegistry(config.sandbox)
         self.agents = agents or AgentRegistry()
