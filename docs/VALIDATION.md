@@ -112,3 +112,12 @@ The browser integration script also asserts visible built-in plugin ownership.
 CI separately exercises real namespace isolation and installed/container runs.
 These checks do not claim authenticated Slack, Discord or live-model validation;
 no native Slack/Discord adapter is introduced by the framework.
+
+## Durable notifications
+
+The portable suite passes 130 tests (two namespace-only checks skipped locally).
+Notification tests exercise real loopback HTTP for JSON, Slack and Discord
+payload formats, redirect rejection, persisted outbox replay, stable retry IDs,
+credential/configuration changes, capacity backlogs, transactional rollback,
+plugin rollback and the actual task-completion audit path. No live Slack or
+Discord message was sent. The browser gate verifies notification/plugin visibility.

@@ -51,11 +51,14 @@ class Config:
     claude_command: str = "claude"
     claude_home: str | None = None
     plugin_config: dict = field(default_factory=dict)
+    notifications: tuple[dict, ...] = ()
 
 
 def validate_config(raw):
     if not isinstance(raw, dict) or not isinstance(raw.get("targets"), list):
         raise ValueError("config.targets must be an array")
+    from .notifications import validate_routes
+    validate_routes(raw.get("notifications", []))
     for key, minimum in (("workers",1),("source_workers",1),("agent_timeout",1),
                          ("max_planning_rounds",1),("max_repair_attempts",0),("max_queued_per_target",1),
                          ("max_events_per_minute",1),("priority_aging_seconds",1),("max_model_calls_per_day",1)):
@@ -227,4 +230,6 @@ def load_config(path: Path) -> Config:
                   str((base/raw["planner_home"]).resolve()) if raw.get("planner_home") else None,
                   int(raw.get("max_model_calls_per_day",1000)), raw.get("claude_command", "claude"),
                   str((base/raw["claude_home"]).resolve()) if raw.get("claude_home") else None,
-                  raw.get("plugin_config", {}))
+                  raw.get("plugin_config", {}),
+                  tuple({**item, **({"path": str((base / item["path"]).resolve())} if item.get("path") else {})}
+                        for item in raw.get("notifications", [])))

@@ -16,6 +16,7 @@ HELP = '''/agents                 List agents and their status
 /activity               Recent activity for the selected agent
 /listeners              Configured sources, schedules and subscriptions
 /plugins                Loaded plugins, versions and capabilities
+/notifications          Destinations and notification delivery status
 /events [TEXT]          Browse received events, including ignored ones
 /events-next            Older events for the same search
 /event ID               Full event payload and goal-relevance decisions
@@ -126,6 +127,16 @@ class Session:
                 "Webhooks: /api/webhooks/github needs a signing secret and an external receiver for localhost.\n"
                 "Timers: configure schedules and a timer.heartbeat subscription. Restart after config edits.\n"
                 "Use /listeners to see exact rules. Guide: https://github.com/Shashankss1205/OpenDots/blob/main/docs/EVENTS.md")
+        if command == '/notifications':
+            data = self.client.request('/api/notifications')
+            lines = ['NOTIFICATIONS', 'Delivery totals: ' + json.dumps(data['counts'])]
+            if data['error']: lines.append(data['error'])
+            for route in data['destinations']:
+                lines.append(f"{route['id']} | {route['kind']} | {'enabled' if route['enabled'] else 'disabled'} | {', '.join(route['events'])}")
+            if not data['destinations']: lines.append('No destinations configured. See docs/NOTIFICATIONS.md.')
+            for delivery in data['deliveries'][:20]:
+                lines.append(f"{delivery['id']} | {delivery['route_id']} | {delivery['status']} | attempts {delivery['attempts']}")
+            return '\n'.join(lines)
         if command == '/plugins':
             data = self.client.request('/api/plugins')
             lines = ['PLUGINS (loaded capabilities; connections appear in /listeners)']

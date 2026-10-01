@@ -7,6 +7,7 @@ import os
 import threading
 import time
 import uuid
+from pathlib import Path
 
 from .agents import AgentRegistry, DemoAgent, validate_plan
 from .store import Store, BudgetExceeded
@@ -67,6 +68,12 @@ class Engine:
         load_builtins(self.plugins, config, local_tools=registry is None, providers=agents is None)
         self.plugins.load_installed(config.plugins, config.plugin_config)
         self.sources.validate_configs()
+        from .notifications import NotificationDispatcher, validate_routes
+        validate_routes(config.notifications, self.plugins.notifications, self.targets)
+        for route in config.notifications:
+            if route["kind"] == "jsonl" and any(Path(route["path"]).resolve().is_relative_to(t.workspace.resolve()) for t in config.targets):
+                raise ValueError("Notification files must be outside target workspaces")
+        self.notifications = NotificationDispatcher(self.store, config.notifications, self.plugins.notifications)
         if agent is None:
             for target in config.targets:
                 self.agents.get(target.agent or config.backend)
@@ -382,10 +389,12 @@ class Engine:
     def worker_loop(self):
         """Caller owns the process lock; one shared loop for service and CLI workers."""
         try:
+            self.notifications.start()
             self.sources.start_listeners(self.ingest, stop_event=self.stop_event)
             self._worker_loop()
         finally:
             self.sources.close()
+            self.notifications.close()
 
     def _worker_loop(self):
         with ThreadPoolExecutor(max_workers=self.config.workers) as pool:
@@ -415,6 +424,7 @@ class Engine:
                     source_names=[item["id"] for item in self.config.sources], agent_names=list(self.agents.agents))
         data["listeners"] = self.listeners()
         data["event_stream"] = self.store.events(limit=20)
+        data["notifications"] = self.notifications.snapshot()
         return data
 
     def listeners(self):

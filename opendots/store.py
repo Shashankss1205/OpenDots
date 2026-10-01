@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS audit(
 CREATE TABLE IF NOT EXISTS schedule_ticks(id TEXT PRIMARY KEY, last_tick INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS source_state(id TEXT PRIMARY KEY, state TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS model_usage(day INTEGER NOT NULL,target_id TEXT NOT NULL,calls INTEGER NOT NULL,PRIMARY KEY(day,target_id));
+CREATE TABLE IF NOT EXISTS notification_routes(id TEXT PRIMARY KEY,revision TEXT NOT NULL,cursor INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS notifications(
+ id TEXT PRIMARY KEY,route_id TEXT NOT NULL,revision TEXT NOT NULL,audit_id INTEGER NOT NULL,
+ body TEXT NOT NULL,status TEXT NOT NULL,attempts INTEGER NOT NULL,next_attempt REAL NOT NULL,
+ error TEXT,created REAL NOT NULL,updated REAL NOT NULL,UNIQUE(route_id,revision,audit_id));
+CREATE INDEX IF NOT EXISTS notification_due ON notifications(status,next_attempt);
 """
 
 
