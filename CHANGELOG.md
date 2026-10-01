@@ -1,3 +1,21 @@
+# OpenDots 0.2.1
+
+This release brings the redesigned browser dashboard to PyPI.
+
+- Light workspace, navy navigation, mint accents and responsive mobile layout.
+- Live goal selector with the selected agent's incoming event, activity and review.
+- Colored, escaped diffs for proposed changes and retained patches.
+- Exact-token approvals with duplicate-decision prevention across review panels.
+- Clear empty, paused and disconnected states; actions disable during connection loss.
+- Browser coverage for approvals, rejection, retained patches, connection recovery,
+  event escaping, navigation and narrow screens.
+- One-command installer defaults to the PyPI release, with optional version pinning.
+- Restored README logo and updated dashboard documentation with actual screenshots.
+
+Stop the running OpenDots service before upgrading its Python environment, then
+restart it to load the new dashboard. Existing configuration and runtime data
+remain in their configured locations. The MIT license is unchanged.
+
 # OpenDots 0.2.0
 
 This release develops the local prototype with a prompt-first terminal client,

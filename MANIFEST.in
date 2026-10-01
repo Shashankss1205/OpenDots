@@ -1,4 +1,4 @@
 include README.md LICENSE NOTICE CHANGELOG.md install.sh
 recursive-include examples *.json *.jsonl *.py *.md *.jsx
 recursive-include deploy *.sh *.example
-recursive-include docs *.md
+recursive-include docs *.md *.png
