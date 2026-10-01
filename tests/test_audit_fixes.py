@@ -5,6 +5,30 @@ from opendots.config import Target
 from opendots.tools import ToolRegistry, digest, confined_path
 
 class AuditFixTests(unittest.TestCase):
+    def test_proposals_require_explicit_acceptance_and_reject_stale_or_modified_work(self):
+        from opendots.config import Config
+        from opendots.engine import Engine
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); source=root/'source'; source.mkdir()
+            target=Target('t','T','Test',source,({'types':['test']},),{'note':'auto'})
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            for number in range(2):
+                engine.ingest({'id':str(number),'type':'test'});engine.drain()
+            first=engine.workspaces.proposal(1); second=engine.workspaces.proposal(2)
+            self.assertEqual(first['base_ref'], 'main')
+            self.assertEqual(second['base_ref'], 'main')
+            with self.assertRaisesRegex(ValueError, 'exact commit'):
+                engine.workspaces.accept(1, 'incorrect')
+            changed=Path(first['workspace'])/'unexpected.txt';changed.write_text('modified')
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                engine.workspaces.accept(1, first['commit'])
+            changed.unlink()
+            engine.workspaces.accept(1, first['commit'])
+            with self.assertRaisesRegex(ValueError, 'stale base'):
+                engine.workspaces.accept(2, second['commit'])
+            engine.ingest({'id':'third','type':'test'}); engine.drain()
+            self.assertEqual(engine.workspaces.proposal(3)['base_ref'], first['branch'])
+
     def test_symlink_cannot_bypass_write_scope(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

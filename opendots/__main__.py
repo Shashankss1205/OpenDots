@@ -33,6 +33,11 @@ def main():
     drain = commands.add_parser("drain", help="Process the queue until idle or awaiting approval")
     drain.add_argument("--timeout", type=int, default=300)
     commands.add_parser("status")
+    proposal = commands.add_parser("proposal", help="Inspect a completed local proposal")
+    proposal.add_argument("work_id", type=int)
+    accept = commands.add_parser("accept", help="Use a reviewed proposal as the base of future work")
+    accept.add_argument("work_id", type=int)
+    accept.add_argument("--commit", required=True)
     pause = commands.add_parser("pause")
     pause.add_argument("target_id")
     resume = commands.add_parser("resume")
@@ -86,6 +91,10 @@ def main():
             print(json.dumps(engine.retry(args.work_id,args.inspected)))
         elif args.command == "cancel":
             print(json.dumps(engine.store.cancel(args.work_id)))
+        elif args.command == "proposal":
+            print(json.dumps(engine.workspaces.proposal(args.work_id), indent=2))
+        elif args.command == "accept":
+            print(json.dumps(engine.workspaces.accept(args.work_id, args.commit)))
         elif args.command == "decide":
             print(json.dumps(engine.store.decide(args.work_id, args.decision == "approve")))
         else:
