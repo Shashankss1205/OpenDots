@@ -361,3 +361,15 @@ class AuditFixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store=Store(Path(directory)/'state.db');store.ingest(first,[])
             self.assertTrue(store.ingest(second,[])['duplicate'])
+
+    def test_retry_creates_fresh_work_without_replaying_plan(self):
+        from opendots.config import Config
+        from opendots.engine import Engine
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source';source.mkdir()
+            target=Target('t','T','Test',source,({'types':['test']},),{'note':'deny'})
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            engine.ingest({'id':'first','type':'test'});engine.drain()
+            with self.assertRaises(ValueError):engine.retry(1)
+            result=engine.retry(1,True);self.assertEqual(result['queued'],1)
+            work=engine.snapshot()['work'][0];self.assertIsNone(work['plan']);self.assertNotEqual(work['event_id'],'first')

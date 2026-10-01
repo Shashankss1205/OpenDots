@@ -119,6 +119,8 @@ def make_server(engine, host="127.0.0.1", port=8765):
                     if not isinstance(body,dict) or type(body.get("paused")) is not bool:
                         raise ValueError("paused must be a boolean")
                     self.send(200,engine.store.pause(unquote(match[1]),body["paused"]))
+                elif match := re.fullmatch(r"/api/work/([1-9][0-9]*)/retry", route):
+                    self.send(202,engine.retry(int(match[1]),isinstance(body,dict) and body.get("inspected") is True))
                 elif match := re.fullmatch(r"/api/work/([1-9][0-9]*)/cancel", route):
                     self.send(200,engine.store.cancel(int(match[1])))
                 elif route == "/api/events":

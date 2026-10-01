@@ -225,6 +225,21 @@ class Engine:
         except Exception as exc:
             self.store.finish(work, "failed", str(exc)[:8000])
 
+    def retry(self, work_id, inspected=False):
+        if not inspected:
+            raise ValueError("Inspect prior effects before retrying; set inspected=true")
+        previous=self.store.detail(work_id)["work"]
+        if previous["status"] not in {"failed","interrupted","blocked","cancelled","rejected","drafted"}:
+            raise ValueError("Only terminal unsuccessful work can be retried")
+        event=self.store.event(previous["event_id"])
+        event.pop("dedup_key",None)
+        event.update(id="retry:"+str(work_id)+":"+str(uuid.uuid4()),target_id=previous["target_id"])
+        event["payload"]={**event["payload"],"opendots_retry":{"work_id":work_id,"status":previous["status"],"error":previous["error"],"owner_inspected":True}}
+        result=self.ingest(event)
+        with self.store.connect() as db:
+            self.store.log(db,"work_retry_requested",result,previous["target_id"],work_id)
+        return result
+
     def _approval_context(self, target, action):
         from .evidence import workspace_fingerprint
         return json.dumps({"workspace": str(target.workspace.resolve()),

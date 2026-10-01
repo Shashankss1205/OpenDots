@@ -17,6 +17,7 @@ HELP = '''/agents                 List agents and their status
 /status                 Connector health, queue age and planning usage
 /history [TEXT]         Search task history
 /work ID                Inspect task evidence
+/retry ID inspected     Replan after inspecting prior effects
 /pause or /resume       Pause or resume the selected agent
 /send TYPE MESSAGE      Send a particular event type
 /help                   Show this help
@@ -90,6 +91,10 @@ class Session:
         if command=='/use':
             if argument not in {t['id'] for t in self.state['targets']}: raise ValueError('Unknown agent. Use /agents.')
             self.selected=argument;return f'Selected {argument}.'
+        if command=='/retry':
+            work_id,_,confirmation=argument.partition(' ')
+            if confirmation!='inspected':raise ValueError('Inspect /work ID first, then /retry ID inspected. Prior effects are not undone.')
+            return json.dumps(self.client.request('/api/work/'+str(int(work_id))+'/retry',{'inspected':True}))
         if command=='/history':
             return json.dumps(self.client.request('/api/work?q='+quote(argument)),indent=2)
         if command=='/work':
