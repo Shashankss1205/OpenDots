@@ -18,11 +18,15 @@ def confined_path(root: Path, relative: str) -> Path:
     if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
         raise ValueError("Tool paths must be relative to the target workspace")
     parts = Path(relative).parts
+    # Resolve reads safely, but never mutate through an alias of an allowed path.
     if any(p in {"..", ".git", ".aws", ".ssh", ".codex"} or p.startswith(".env") for p in parts):
         raise ValueError("Traversal and credential paths are not allowed")
     candidate = (root / relative).resolve()
     if not candidate.is_relative_to(root.resolve()) or candidate == root.resolve():
         raise ValueError("Path escapes the target workspace")
+    resolved_parts = candidate.relative_to(root.resolve()).parts
+    if any(p in {".git", ".aws", ".ssh", ".codex"} or p.startswith(".env") for p in resolved_parts):
+        raise ValueError("Resolved credential paths are not allowed")
     return candidate
 
 
@@ -87,6 +91,12 @@ class ToolRegistry:
             raise ValueError("Tool arguments must be strings")
         if tool in {"read_file", "write_file", "replace_text"}:
             confined_path(target.workspace, args["path"])
+        if tool in {"write_file", "replace_text"}:
+            current = target.workspace
+            for part in Path(args["path"]).parts:
+                current = current / part
+                if current.is_symlink():
+                    raise ValueError("Writes through symlinks are not allowed")
         if tool in {"write_file", "replace_text"} and not any(fnmatch.fnmatchcase(args["path"], pattern) for pattern in target.write_paths):
             raise ValueError("Write path is outside the owner-configured scope")
         if tool == "write_file" and len(args["content"].encode()) > 256_000:
