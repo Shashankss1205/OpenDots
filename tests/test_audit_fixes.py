@@ -294,3 +294,13 @@ class AuditFixTests(unittest.TestCase):
             target=Target('t','T','Test',root,(),{},write_paths=('*',))
             with self.assertRaisesRegex(ValueError,'protected'):
                 ToolRegistry().execute(target,{'tool':'write_file','args':{'path':'check.py','content':'pass','expected_sha256':digest('assert False')}})
+
+    def test_snapshot_bounds_inventory_and_serialized_bytes(self):
+        import json
+        from opendots.agents import workspace_snapshot
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for n in range(40):(root/f'{n}.txt').write_text('x'*100)
+            entries,truncated=workspace_snapshot(root,{'max_files':3,'max_bytes':400})
+            self.assertTrue(truncated);self.assertLessEqual(len(entries),3)
+            self.assertLessEqual(len(json.dumps(entries).encode()),400)
