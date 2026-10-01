@@ -215,7 +215,10 @@ class Store:
     def snapshot(self, limit=200):
         with self.connect() as db:
             targets = [{"id": row["id"], "state": json.loads(row["state"])} for row in db.execute("SELECT * FROM targets")]
-            work = [dict(row) for row in db.execute("SELECT * FROM work ORDER BY id DESC LIMIT ?", (limit,))]
+            work = [dict(row) for row in db.execute("""SELECT * FROM work
+                WHERE status IN ('running','waiting_approval','ready')
+                OR id IN (SELECT id FROM work ORDER BY id DESC LIMIT ?)
+                ORDER BY id DESC""", (limit,))]
             for item in work:
                 item["plan"] = json.loads(item["plan"]) if item["plan"] else None
                 if item["status"] == "waiting_approval":
@@ -223,6 +226,15 @@ class Store:
             audit = [dict(row) for row in db.execute("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,))]
             for item in audit:
                 item["detail"] = json.loads(item["detail"])
+            # Approval previews must survive unrelated audit traffic as well.
+            known = {item["id"] for item in audit}
+            for item in work:
+                if item["status"] == "waiting_approval":
+                    row = db.execute("SELECT * FROM audit WHERE work_id=? AND kind='approval_requested' ORDER BY id DESC LIMIT 1", (item["id"],)).fetchone()
+                    if row and row["id"] not in known:
+                        entry = dict(row); entry["detail"] = json.loads(entry["detail"])
+                        audit.append(entry)
+            audit.sort(key=lambda item: item["id"], reverse=True)
             counts = {row["status"]: row["count"] for row in db.execute("SELECT status,count(*) count FROM work GROUP BY status")}
             events = db.execute("SELECT count(*) FROM events").fetchone()[0]
             return {"targets": targets, "work": work, "audit": audit, "counts": counts, "event_count": events}
