@@ -1,0 +1,61 @@
+{
+  "database": "../../.opendots-goal/state.db",
+  "backend": "claude",
+  "workers": 2,
+  "source_workers": 2,
+  "agent_timeout": 180,
+  "sandbox": "bubblewrap",
+  "max_planning_rounds": 6,
+  "max_repair_attempts": 2,
+  "max_model_calls_per_day": 120,
+  "max_queued_per_target": 100,
+  "targets": [
+    {
+      "id": "project",
+      "name": "OpenDots usability maintainer",
+      "workspace": "..",
+      "objective": "Improve the real OpenDots CLI's handling of missing configuration, unavailable providers and invalid workspace paths. On each heartbeat or relevant event, inspect the current code and recent notes. Consider multiple concrete next steps, compare their user impact and evidence, and record a short decision summary with alternatives and the chosen next step. Make at most one focused change per task, only when the source supports it. Preserve existing behavior and avoid repeating accepted improvements. If no useful permitted change is justified, run the required check and record what was inspected and what should trigger another attempt. Never claim an upstream change or a live-provider test unless evidence establishes it.",
+      "desired_state": {
+        "goal": "Actionable CLI errors for setup failures",
+        "deliverable": "One reviewable local proposal with current syntax-check evidence"
+      },
+      "subscriptions": [
+        {"types": ["owner.*"], "sources": ["local"]},
+        {"types": ["timer.heartbeat"], "sources": ["timer"]},
+        {"types": ["ci.failed", "feedback.received"], "sources": ["file", "local"]}
+      ],
+      "policy": {
+        "read_file": "auto",
+        "write_file": "approval",
+        "replace_text": "approval",
+        "run_check": "auto",
+        "note": "auto"
+      },
+      "write_paths": ["opendots/setup.py", "opendots/__main__.py"],
+      "protected_paths": ["tests/**", ".github/**", "pyproject.toml", "LICENSE"],
+      "checks": {
+        "syntax": ["{python}", "-c", "import ast,pathlib; files=list(pathlib.Path('opendots').glob('*.py')); assert files, 'No OpenDots Python modules found'; [ast.parse(p.read_text(), filename=str(p)) for p in files]; print(f'Parsed {len(files)} Python modules')"]
+      },
+      "required_checks": ["syntax"],
+      "model_calls_per_day": 60
+    }
+  ],
+  "schedules": [
+    {
+      "id": "project-heartbeat",
+      "target_id": "project",
+      "type": "timer.heartbeat",
+      "interval_seconds": 1800,
+      "payload": {"title": "Reassess progress toward the configured goal"}
+    }
+  ],
+  "sources": [
+    {
+      "id": "project-inbox",
+      "kind": "jsonl",
+      "path": "../../.opendots-goal/events.jsonl",
+      "interval_seconds": 5,
+      "batch_size": 100
+    }
+  ]
+}

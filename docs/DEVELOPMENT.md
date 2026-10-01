@@ -11,7 +11,7 @@ python3 -m pip install -e .
 python3 -m opendots --config examples/config.json serve
 ```
 
-For real planning, provide an installed authenticated Codex CLI and set `backend` to `codex`. Optional `model`, `codex_command`, `agent_timeout` and target `agent` select behavior. Account access/limits apply. Provider errors do not switch silently to the deterministic planner.
+For real planning, provide an installed authenticated Claude Code or Codex CLI and set `backend` to `claude` or `codex`. Start with the [goal and event-stream guide](GOALS_AND_EVENTS.md) and [provider setup](PROVIDERS.md). Optional `model`, `codex_command`, `agent_timeout` and target `agent` select behavior. Account access/limits apply. Provider errors do not switch silently to the deterministic planner.
 
 Use separate disposable configurations/databases for acceptance runs. Independent source workspaces must not overlap. Keep credentials outside fixture directories.
 

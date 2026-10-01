@@ -6,52 +6,80 @@ An open-source experiment inspired by OpenAI’s Dots idea: persistent agents th
 
 OpenDots is an independent local prototype. Targets subscribe to events; workers propose actions, follow owner policies, run checks, and retain reviewable Git branches and patches. SQLite keeps task state, memory, and an audit trail across restarts.
 
-## Quick start
+## Start with a real goal
 
-Requires Python 3.11+, Git, and Linux with working bubblewrap namespaces for isolated checks.
+Read **[Goals, heartbeats and event streams](docs/GOALS_AND_EVENTS.md)** for the
+complete runnable walkthrough. It uses a real repository and Claude Code or
+Codex, explains recurring proactive planning, and shows JSONL, HTTP and GitHub
+configuration. [Provider setup](docs/PROVIDERS.md) covers authentication.
+
+Requires Python 3.11+, Git, Linux with working Bubblewrap namespaces, and an
+installed authenticated planning CLI. From a current checkout:
 
 ```bash
 git clone https://github.com/Shashankss1205/OpenDots.git
 cd OpenDots
-bash install.sh --source "$PWD"
-export PATH="$HOME/.local/share/opendots/runtime/bin:$PATH"
-cd ..
-opendots init
-opendots doctor
-opendots serve
+# Install/authenticate Claude Code separately, or select Codex in the config.
+claude auth login
+python3 -m opendots --config examples/goal-agent.json doctor
+python3 -m opendots --config examples/goal-agent.json serve --port 8766
 ```
 
-A download-and-run variant is also available:
+In another terminal in that checkout:
+
+```bash
+python3 -m opendots tui --url http://127.0.0.1:8766
+```
+
+The example pursues a real CLI-usability goal in OpenDots itself, with write
+approval and a required syntax check. Adjust its goal, workspace, permissions and
+behavioral checks for your project. It is not a fixed repair recipe. A heartbeat
+starts on service startup and repeats every 30 minutes. Runtime data stays outside
+the source repository. Read the guide before enabling unattended work.
+
+## Install the command
+
+```bash
+bash install.sh --source "$PWD"
+export PATH="$HOME/.local/share/opendots/runtime/bin:$PATH"
+```
+
+Or download the installer:
 
 ```bash
 curl -fsSLo install-opendots.sh https://raw.githubusercontent.com/Shashankss1205/OpenDots/main/install.sh
 bash install-opendots.sh
 ```
 
-The installer uses an isolated Python environment and does not require sudo. Install
-system prerequisites first (`sudo apt-get install git bubblewrap python3-venv` on
-Ubuntu/Debian with Python 3.11+). Use `--ref COMMIT` when installing remotely to pin
-a reviewed revision; `--prefix DIR` changes the installation directory. Run
-`bash install.sh --help` for options. It never overwrites an existing installation.
-For an existing repository, use `opendots init --workspace /path/to/repo --backend codex`,
-then configure subscriptions, write scopes and required checks in the printed config.
+The installer creates an isolated Python environment without sudo. Install system
+prerequisites first (`sudo apt-get install git bubblewrap python3-venv` on
+Ubuntu/Debian with Python 3.11+). `--ref COMMIT` pins a reviewed remote revision;
+`--prefix DIR` chooses a new installation directory. Existing installations are
+not overwritten. For a fresh real-project config:
 
-Open **http://127.0.0.1:8765**, click **Run five-event demo**, and review the proposed actions. The default planner is deterministic and clearly labeled; the runtime, checks, persistence, approvals, and Git worktrees are real.
+```bash
+opendots init --directory "$HOME/.config/opendots-project" \
+  --workspace /path/to/your/repository --backend claude
+```
 
-For disposable fixtures on a host without working namespaces, explicitly set `"sandbox": "trusted-local"` in [the configuration](examples/config.json). This executes checks without process or network isolation. There is no silent fallback.
+Set the goal, scopes, checks and heartbeat using the guide. Pass the printed
+configuration path explicitly to `doctor`, `serve` and service installation.
+`init` without a workspace still creates optional deterministic fixtures; those
+are not the real-agent onboarding path.
 
 ## Background service (Linux systemd)
 
 ```bash
-opendots service install
-opendots service start
-opendots                 # open the terminal client
-opendots service status
-opendots service stop
+opendots --config examples/goal-agent.json service install --name opendots-goal
+opendots service start --name opendots-goal
+opendots                 # open the terminal client on the service port 8765
+opendots service status --name opendots-goal
+opendots service stop --name opendots-goal
 ```
 
-The service runs under your user account. Set up and diagnose the configuration
-first. User services normally follow your login session; configure user lingering
+The service runs under your user account on port 8765. Stop any existing runtime
+on that port first; stop the foreground walkthrough runtime before starting a
+service for the same database. Set up and diagnose the configuration first. User services normally follow your login session; configure user lingering
 with your system administrator if agents must run after logout. No system-wide
 service or sudo action is performed by these commands.
 
@@ -81,16 +109,14 @@ replaces the base for future tasks with a new source snapshot and clears the
 previous acceptance. Old proposals remain available for inspection. Update your
 source repository from its remote yourself before syncing.
 
-## Use a real agent
+## Optional deterministic fixtures
 
-Install and authenticate Claude Code or Codex CLI, then set `"backend": "claude"` or `"backend": "codex"` in your configuration. OpenDots requests structured plans and executes permitted actions through its own tool registry. See [provider setup](docs/PROVIDERS.md) for authentication, profiles and validation boundaries. You can configure workers, models, subscriptions, write scopes, required checks, schedules, and providers.
-
-```bash
-python3 -m opendots --config examples/config.json serve
-python3 -m opendots --config examples/config.json ingest examples/five-events.json
-python3 -m opendots --config examples/config.json drain
-python3 -m opendots --config examples/config.json status
-```
+For runtime development, `examples/config.json` and `examples/five-events.json`
+exercise the predefined Kubernetes/React fixtures. They use no model by default.
+The fixture dashboard includes a five-event button. These examples do not modify
+upstream repositories or a real cluster. Explicit `trusted-local` execution is
+only for owner-controlled disposable fixtures when namespaces are unavailable;
+the runtime never selects it automatically.
 
 ## Included
 
@@ -108,7 +134,7 @@ python3 -m unittest discover -s tests -v
 OPENDOTS_TEST_SANDBOX=trusted-local python3 -m unittest discover -s tests -v
 ```
 
-[Implementation](docs/IMPLEMENTATION.md) explains every subsystem and its boundaries. [Validation](docs/VALIDATION.md) records current and historical results. [Development](docs/DEVELOPMENT.md) covers installation, demo runners, and deployment templates.
+[Goals and events](docs/GOALS_AND_EVENTS.md) is the user walkthrough. [Implementation](docs/IMPLEMENTATION.md) explains every subsystem and its boundaries. [Validation](docs/VALIDATION.md) records current and historical results. [Development](docs/DEVELOPMENT.md) covers installation, demo runners, and deployment templates.
 
 OpenDots 0.2.0 retains local proposals. Outbound GitHub publishing, automatic PRs, production multi-user hosting, and automatic synchronization with upstream source changes are outside its implemented scope. Explicit source synchronization is available. See the [remaining work](docs/ROADMAP.md) and [contributor guide](CONTRIBUTING.md).
 

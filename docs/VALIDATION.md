@@ -65,3 +65,17 @@ python3 scripts/live_case_set.py --help
 ```
 
 Live runs require a responsive authenticated Codex CLI and runner-specific dependencies. See [DEVELOPMENT.md](DEVELOPMENT.md). No production security certification, multi-day soak, deployed-container execution, lossless ingestion or general crash-atomic side effects are claimed.
+
+## Claude provider and real-goal guide additions
+
+The Claude provider is tested across subprocess invocation, complete structured
+output, malformed/error results, missing executables, profile-aware auth probes,
+credential exclusions and OpenDots approval handling. The goal guide adds tests
+for owner/heartbeat/JSONL routing, durable tick deduplication, GitHub repository
+filters and execution of the example's required syntax check. The guide's real
+configuration has no deterministic recipes. Local test planners used to verify
+routing are controlled test inputs, not evidence of live model success.
+
+No authenticated Claude Code or Codex CLI was available for a fresh model run
+during these additions. Follow [the guide](GOALS_AND_EVENTS.md) to perform that
+acceptance with your own installed provider.

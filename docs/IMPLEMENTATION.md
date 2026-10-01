@@ -9,7 +9,7 @@ This document describes the code shipped in OpenDots 0.2.0. OpenDots is an indep
 | `opendots/config.py` | Immutable configuration, target validation, path resolution |
 | `opendots/engine.py` | Ingestion, routing, attention, scheduling, planning, execution and completion gates |
 | `opendots/store.py` | SQLite transactions, task state, approval cursors, audit, memory and recovery |
-| `opendots/agents.py` | Agent registry, deterministic planner and structured Codex CLI planning |
+| `opendots/agents.py` | Agent registry, deterministic planner and structured Codex/Claude CLI planning |
 | `opendots/tools.py` | Tool registry, argument validation, file tools and bounded checks |
 | `opendots/workspaces.py` | Source snapshots, task worktrees, commits, branches and patches |
 | `opendots/evidence.py` | Workspace fingerprints and check-configuration signatures |
@@ -60,6 +60,8 @@ The Codex provider launches the actual CLI with `-a never exec --ephemeral --san
 Plans propose application tools; the engine independently validates arguments, policy and scopes. `auto` executes. `ask`/`approval` persists a preview and pauses. `draft` retains a proposal without executing that action or later actions; earlier automatically executed actions may already have occurred. `deny` blocks. Approval tokens bind the task ID, planning round, action index, exact arguments, workspace fingerprint, resolved check configuration, sandbox, scopes and owner policy with SHA-256. Changed context requires a fresh review. HTTP approval must supply the current token. CLI `decide` selects the current pending action directly.
 
 Planner environment variables are allowlisted. `planner_env` grants additional named variables and `planner_home` selects a dedicated Codex profile. CLI hooks and plugins remain a separate boundary. Application policy does not attest every action of an externally configured planner.
+
+Claude Code is also available as `backend: claude` or a target `agent` override. It uses schema-constrained print output with native tools disabled; OpenDots performs any additional requested reads and all mutations. See [providers](PROVIDERS.md) for flags, authentication and validation boundaries.
 
 ## Built-in tools and file safety
 
