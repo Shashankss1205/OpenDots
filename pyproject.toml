@@ -1,13 +1,31 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "opendots-local-prototype"
-version = "0.1.5"
+version = "0.2.0"
 description = "Event-driven agents with persistent targets and reviewable local actions"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
+keywords = ["agents", "automation", "terminal", "event-driven"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
 requires-python = ">=3.11"
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Shashankss1205/OpenDots"
+Repository = "https://github.com/Shashankss1205/OpenDots"
+Issues = "https://github.com/Shashankss1205/OpenDots/issues"
+Documentation = "https://github.com/Shashankss1205/OpenDots/tree/main/docs"
 
 [project.scripts]
 opendots = "opendots.__main__:main"

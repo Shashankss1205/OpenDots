@@ -1,0 +1,48 @@
+name: Draft release
+on:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: draft-release
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - name: Validate runtime and build packages
+        run: |
+          python -m unittest discover -s tests -v
+          python -m pip install build twine
+          python -m build
+          python -m twine check dist/*
+          cp install.sh dist/install.sh
+          cd dist
+          sha256sum *.whl *.tar.gz install.sh > SHA256SUMS
+      - name: Retain release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-distributions
+          path: dist/*
+      - name: Create draft release once per version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to overwrite assets."
+            exit 0
+          fi
+          gh release create "$tag" dist/* --draft --target "$GITHUB_SHA" \
+            --title "OpenDots $version" --notes-file CHANGELOG.md

@@ -39,7 +39,10 @@ if [[ -e "$install_prefix" ]]; then
 fi
 python3 -m venv "$install_prefix"
 "$install_prefix/bin/python" -m pip install "$install_source"
-echo "Installed OpenDots from $(git -C "$install_source" rev-parse HEAD)"
+"$install_prefix/bin/opendots" --version
+if git -C "$install_source" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Source revision: $(git -C "$install_source" rev-parse HEAD)"
+fi
 echo "Add to PATH: export PATH=\"$install_prefix/bin:\$PATH\""
 echo "Next: $install_prefix/bin/opendots init"
 echo "Then: $install_prefix/bin/opendots doctor"
