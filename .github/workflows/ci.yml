@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Start installed runtime in container
-        run: docker compose up --build --wait --wait-timeout 120
+        run: OPENDOTS_DEMO=1 docker compose up --build --wait --wait-timeout 120
       - name: Verify non-root user, persistent config and HTTP API
         run: |
           test "$(docker compose exec -T opendots id -u)" = 10001

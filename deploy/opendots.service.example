@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/absolute/path/to/opendots
-ExecStart=/usr/bin/python3 -m opendots --config /absolute/path/to/opendots/examples/config.json serve
+ExecStart=/usr/bin/python3 -m opendots --config /absolute/path/to/your/config.json serve
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=240
