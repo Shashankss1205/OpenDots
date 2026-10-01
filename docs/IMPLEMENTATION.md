@@ -62,6 +62,26 @@ An agent implements `plan(target, event, state)`. Plans contain a summary, actio
 
 The Codex provider launches the actual CLI with `-a never exec --ephemeral --sandbox read-only --skip-git-repo-check --cd ... --output-schema ... --output-last-message ... -`, plus an optional model. The registry supplies the JSON schema. Context includes bounded workspace snapshots, owner objective/skills, desired and observed state, memory, the event, current round and prior results. Default serialized snapshot budgets are 128,000 bytes total, 32,000 per file and 1,000 inventory entries, configurable through `context_limits`; skills are bounded to 64,000 bytes, summaries to 4,000 characters and results to 1 MB. Planner errors do not fall back to the demo provider.
 
+Snapshots reserve path inventory before adding file contents. Source directories
+are visited before docs/examples/assets, with breadth-first traversal within each
+priority group; source file contents take priority over other text. Both inventory
+entries and visited directories are capped by `max_files`. Exact serialized JSON
+costs count toward `max_bytes` (minimum 2), and a file that does not fit remains a
+path-only entry rather than ending the snapshot. `content_omitted: true` means the
+planner should request an application `read_file` action with
+`outcome=needs_follow_up` if it needs that file. `snapshot_truncated: true` means
+the path inventory is incomplete, not that unlisted files are absent. An omitted
+body alone does not set that flag. The planner must not guess filenames or infer
+`expected_sha256: absent` from missing snapshot entries.
+
+Owners can override the heuristic with `context_limits.priority_paths`, an array
+of workspace-relative glob patterns, for example `["packages/api/*", "docs/guide.md"]`.
+These paths take priority for both traversal and contents, without bypassing
+exclusions or increasing budgets. `exclude` patterns match relative paths or
+entry basenames, so `node_modules` also excludes nested dependency directories.
+Hidden entries and symlinks are not included in the snapshot. Files too large,
+binary, unreadable, or unable to fit retain their path-only entries.
+
 Plans propose application tools; the engine independently validates arguments, policy and scopes. `auto` executes. `ask`/`approval` persists a preview and pauses. `draft` retains a proposal without executing that action or later actions; earlier automatically executed actions may already have occurred. `deny` blocks. Approval tokens bind the task ID, planning round, action index, exact arguments, workspace fingerprint, resolved check configuration, sandbox, scopes and owner policy with SHA-256. Changed context requires a fresh review. HTTP approval must supply the current token. CLI `decide` selects the current pending action directly.
 
 Planner environment variables are allowlisted. `planner_env` grants additional named variables and `planner_home` selects a dedicated Codex profile. CLI hooks and plugins remain a separate boundary. Application policy does not attest every action of an externally configured planner.

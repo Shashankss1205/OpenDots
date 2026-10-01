@@ -90,8 +90,11 @@ def validate_config(raw):
     for key in ("max_files","max_bytes","max_file_bytes"):
         if key in limits and (type(limits[key]) is not int or limits[key]<1):
             raise ValueError(f"context_limits.{key} must be positive")
-    if "exclude" in limits and (not isinstance(limits["exclude"],list) or any(not isinstance(v,str) for v in limits["exclude"])):
-        raise ValueError("context_limits.exclude must be a string array")
+    if limits.get("max_bytes", 128000) < 2:
+        raise ValueError("context_limits.max_bytes must be at least 2")
+    for key in ("exclude", "priority_paths"):
+        if key in limits and (not isinstance(limits[key],list) or any(not isinstance(v,str) for v in limits[key])):
+            raise ValueError(f"context_limits.{key} must be a string array")
     for index, target in enumerate(raw["targets"]):
         prefix = f"targets[{index}]"
         if not isinstance(target, dict):
