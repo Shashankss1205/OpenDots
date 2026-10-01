@@ -210,8 +210,9 @@ class RuntimeTests(unittest.TestCase):
 
     def test_codex_adapter_invocation_contract(self):
         observed = {}
-        def fake_run(argv, cwd, timeout, stdin):
+        def fake_run(argv, cwd, timeout, stdin, env=None):
             observed.update(argv=argv, cwd=cwd, stdin=stdin)
+            self.assertIsInstance(env, dict)
             schema = json.loads(Path(argv[argv.index("--output-schema") + 1]).read_text())
             self.assertEqual(schema["required"], ["summary", "actions", "outcome"])
             Path(argv[argv.index("--output-last-message") + 1]).write_text(json.dumps({"summary": "Planned", "actions": [], "outcome": "complete"}))
