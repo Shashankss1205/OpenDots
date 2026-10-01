@@ -319,4 +319,10 @@ class Store:
             audit.sort(key=lambda item: item["id"], reverse=True)
             counts = {row["status"]: row["count"] for row in db.execute("SELECT status,count(*) count FROM work GROUP BY status")}
             events = db.execute("SELECT count(*) FROM events").fetchone()[0]
-            return {"targets": targets, "work": work, "audit": audit, "counts": counts, "event_count": events}
+            sources = [{"id":row["id"], **json.loads(row["state"])} for row in db.execute("SELECT * FROM source_state")]
+            oldest=db.execute("SELECT min(created) FROM work WHERE status='queued'").fetchone()[0]
+            usage=[dict(row) for row in db.execute("SELECT target_id,calls FROM model_usage WHERE day=?",(int(time.time())//86400,))]
+            metrics={"oldest_queued_seconds":max(0,time.time()-oldest) if oldest else 0,
+                     "database_bytes":self.path.stat().st_size, "planning_calls_today":usage}
+            return {"targets": targets, "work": work, "audit": audit, "counts": counts, "event_count": events,
+                    "sources":sources,"metrics":metrics}
