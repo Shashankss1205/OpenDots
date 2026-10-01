@@ -1,5 +1,6 @@
 import json
 import re
+import signal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import threading
@@ -140,6 +141,13 @@ def serve(engine, host="127.0.0.1", port=8765):
         worker = threading.Thread(target=run, name="opendots-scheduler")
         worker.start()
         print(f"OpenDots: http://127.0.0.1:{server.server_address[1]}  backend={engine.config.backend}", flush=True)
+        previous_handlers = {}
+        if threading.current_thread() is threading.main_thread():
+            def stop(signum, frame):
+                engine.stop_event.set()
+                threading.Thread(target=server.shutdown, daemon=True).start()
+            for signum in (signal.SIGTERM, signal.SIGINT):
+                previous_handlers[signum] = signal.signal(signum, stop)
         try:
             server.serve_forever(poll_interval=0.2)
         except KeyboardInterrupt:
@@ -148,5 +156,7 @@ def serve(engine, host="127.0.0.1", port=8765):
             engine.stop_event.set()
             server.server_close()
             worker.join()
+            for signum, handler in previous_handlers.items():
+                signal.signal(signum, handler)
         if failures:
             raise failures[0]

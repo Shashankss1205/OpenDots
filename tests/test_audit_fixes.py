@@ -140,3 +140,19 @@ class AuditFixTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'outside'):
                 Engine(Config((target,),root/'.opendots/state.db'))
             self.assertFalse((root/'.opendots').exists())
+
+    def test_sigterm_exits_service_cleanly(self):
+        import json, subprocess, sys, select
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); config=root/'config.json'
+            config.write_text(json.dumps({'database':str(root/'state.db'),'targets':[]}))
+            process=subprocess.Popen([sys.executable,'-m','opendots','--config',str(config),'serve','--port','0'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            try:
+                ready,_,_=select.select([process.stdout],[],[],5)
+                self.assertTrue(ready,'Service failed to start')
+                self.assertIn(b'OpenDots:',process.stdout.readline())
+                process.terminate()
+                _,error=process.communicate(timeout=5)
+                self.assertEqual(process.returncode,0,error)
+            finally:
+                if process.poll() is None: process.kill();process.communicate()
