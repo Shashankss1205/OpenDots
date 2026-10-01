@@ -277,7 +277,7 @@ class Engine:
         for target in data["targets"]:
             if target["id"] in self.targets:
                 spec = self.targets[target["id"]]
-                target.update(name=spec.name, objective=spec.objective, policy=spec.policy)
+                target.update(name=spec.name, objective=spec.objective, policy=spec.policy, subscriptions=spec.subscriptions)
         data.update(backend=self.config.backend, workers=self.config.workers,
                     tool_names=list(self.registry.handlers), sandbox=self.config.sandbox,
                     source_names=[item["id"] for item in self.config.sources], agent_names=list(self.agents.agents))
