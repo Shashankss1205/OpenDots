@@ -31,7 +31,7 @@ try:
             page.goto(f'http://127.0.0.1:{server.server_address[1]}')
             page.wait_for_function("document.querySelector('#received-list').textContent.includes('90%')")
             assert page.locator('#sample').is_hidden(), 'Demo must be hidden in normal runtime'
-            page.locator('#listeners details').click()
+            page.locator('#listener-list details summary').click()
             page.get_by_text('Types: input.*', exact=False).wait_for()
             page.locator('#event-type').fill('input.feedback')
             page.locator('#event-title').fill('<img src=x onerror=alert(1)> User information')
