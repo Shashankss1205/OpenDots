@@ -1,5 +1,7 @@
 # OpenDots
 
+<img src="https://raw.githubusercontent.com/Shashankss1205/OpenDots/main/assets/OpenDots-wordmark.png" alt="OpenDots" width="360">
+
 ![OpenDots architecture: your goal and incoming events drive planning, permitted actions, checks, and changes for your review.](https://raw.githubusercontent.com/Shashankss1205/OpenDots/main/assets/opendots-overview.svg)
 
 **Give an agent your goal. Connect the information it needs. Review the work it proposes.**
