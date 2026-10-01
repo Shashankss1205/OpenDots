@@ -15,6 +15,8 @@ HELP = '''/agents                 List agents and their status
 /reject ID              Reject a reviewed action
 /activity               Recent activity for the selected agent
 /status                 Connector health, queue age and planning usage
+/history [TEXT]         Search task history
+/work ID                Inspect task evidence
 /pause or /resume       Pause or resume the selected agent
 /send TYPE MESSAGE      Send a particular event type
 /help                   Show this help
@@ -88,6 +90,10 @@ class Session:
         if command=='/use':
             if argument not in {t['id'] for t in self.state['targets']}: raise ValueError('Unknown agent. Use /agents.')
             self.selected=argument;return f'Selected {argument}.'
+        if command=='/history':
+            return json.dumps(self.client.request('/api/work?q='+quote(argument)),indent=2)
+        if command=='/work':
+            return json.dumps(self.client.request('/api/work/'+str(int(argument))),indent=2)
         if command=='/reviews':
             return '\n'.join(f"#{w['id']} | {w['target_id']} | {w['plan']['summary']}" for w in self.state['work'] if w['status']=='waiting_approval') or 'Nothing needs your review.'
         if command in {'/review','/approve','/reject'}:

@@ -294,6 +294,34 @@ class Store:
                 self.log(db, "work_interrupted", {"reason": "Recovered after process interruption"}, row["target_id"], row["id"])
             return len(rows)
 
+    def history(self, before=None, target=None, status=None, query="", limit=50):
+        if not 1 <= limit <= 200:
+            raise ValueError("History limit must be 1-200")
+        clauses=[];values=[]
+        for column, value in (("target_id",target),("status",status)):
+            if value:
+                clauses.append(column+"=?");values.append(value)
+        if before is not None:
+            clauses.append("id<?");values.append(int(before))
+        if query:
+            clauses.append("(COALESCE(summary,'') LIKE ? OR COALESCE(error,'') LIKE ? OR event_id LIKE ?)")
+            values.extend(["%"+query+"%"]*3)
+        where=" WHERE "+" AND ".join(clauses) if clauses else ""
+        with self.connect() as db:
+            rows=[dict(row) for row in db.execute("SELECT id,target_id,event_id,status,summary,error,created,updated FROM work"+where+" ORDER BY id DESC LIMIT ?",(*values,limit+1))]
+        return {"work":rows[:limit],"next_before":rows[limit-1]["id"] if len(rows)>limit else None}
+
+    def detail(self, work_id, before=None):
+        with self.connect() as db:
+            row=db.execute("SELECT * FROM work WHERE id=?",(work_id,)).fetchone()
+            if row is None:
+                raise ValueError("Work item not found")
+            work=dict(row);work["plan"]=json.loads(work["plan"]) if work["plan"] else None
+            if work["status"]=="waiting_approval":work["approval_token"]=self.approval_token(work)
+            audit=[dict(row) for row in db.execute("SELECT * FROM audit WHERE work_id=? AND id<? ORDER BY id DESC LIMIT 201",(work_id,before or 9223372036854775807))]
+            for item in audit:item["detail"]=json.loads(item["detail"])
+            return {"work":work,"audit":audit[:200],"next_before":audit[199]["id"] if len(audit)>200 else None}
+
     def snapshot(self, limit=200):
         with self.connect() as db:
             targets = [{"id": row["id"], "state": json.loads(row["state"])} for row in db.execute("SELECT * FROM targets")]

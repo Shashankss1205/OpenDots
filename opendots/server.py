@@ -4,7 +4,7 @@ import signal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import threading
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, unquote
 from .store import CapacityError
 
 
@@ -48,7 +48,17 @@ def make_server(engine, host="127.0.0.1", port=8765):
             if not self.local_request():
                 return
             route = urlparse(self.path).path
-            if route == "/api/state":
+            if route == "/api/work" or re.fullmatch(r"/api/work/[1-9][0-9]*", route):
+                try:
+                    query=parse_qs(urlparse(self.path).query)
+                    before=int(query['before'][0]) if 'before' in query else None
+                    if route == "/api/work":
+                        self.send(200,engine.store.history(before,query.get('target',[None])[0],query.get('status',[None])[0],query.get('q',[''])[0],int(query.get('limit',['50'])[0])))
+                    else:
+                        self.send(200,engine.store.detail(int(route.rsplit('/',1)[1]),before))
+                except (ValueError,TypeError) as exc:
+                    self.send(400,{"error":str(exc)})
+            elif route == "/api/state":
                 self.send(200, engine.snapshot())
             elif route == "/api/health":
                 self.send(200, {"status": "ok", "backend": engine.config.backend})
@@ -108,7 +118,7 @@ def make_server(engine, host="127.0.0.1", port=8765):
                 if match := re.fullmatch(r"/api/targets/([^/]+)/pause", route):
                     if not isinstance(body,dict) or type(body.get("paused")) is not bool:
                         raise ValueError("paused must be a boolean")
-                    self.send(200,engine.store.pause(match[1],body["paused"]))
+                    self.send(200,engine.store.pause(unquote(match[1]),body["paused"]))
                 elif match := re.fullmatch(r"/api/work/([1-9][0-9]*)/cancel", route):
                     self.send(200,engine.store.cancel(int(match[1])))
                 elif route == "/api/events":
