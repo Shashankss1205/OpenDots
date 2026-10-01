@@ -5,6 +5,28 @@ from opendots.config import Target
 from opendots.tools import ToolRegistry, digest, confined_path
 
 class AuditFixTests(unittest.TestCase):
+    def test_source_sync_keeps_old_proposals_and_rebases_future_work(self):
+        from opendots.config import Config
+        from opendots.engine import Engine, process_lock
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); source=root/'source'; source.mkdir(); (source/'value').write_text('old')
+            target=Target('t','T','Test',source,({'types':['test']},),{'note':'auto'})
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            engine.ingest({'id':'one','type':'test'}); engine.drain()
+            old=engine.workspaces.proposal(1)
+            engine.workspaces.accept(1,old['commit'])
+            (source/'value').write_text('upstream')
+            with process_lock(engine.config.database):
+                synced=engine.workspaces.sync(target)
+            self.assertEqual((Path(old['workspace'])/'value').read_text(),'old')
+            with self.assertRaisesRegex(ValueError,'stale base'):
+                engine.workspaces.accept(1,old['commit'])
+            engine.ingest({'id':'two','type':'test'}); engine.drain()
+            new=engine.workspaces.proposal(2)
+            self.assertEqual(new['base_ref'],synced['base_ref'])
+            self.assertEqual((Path(new['workspace'])/'value').read_text(),'upstream')
+            self.assertEqual((source/'value').read_text(),'upstream')
+
     def test_proposals_require_explicit_acceptance_and_reject_stale_or_modified_work(self):
         from opendots.config import Config
         from opendots.engine import Engine

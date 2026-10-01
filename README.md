@@ -63,6 +63,12 @@ inspect the patch, then `/accept ID COMMIT` with the displayed commit to make it
 the base for future tasks. Acceptance retains changes locally; your source
 repository is unchanged. Pause the target and finish or cancel active work first.
 
+To refresh from edits in your source repository, finish or cancel active work,
+stop the service, run `opendots sync TARGET_ID`, then restart the service. This
+replaces the base for future tasks with a new source snapshot and clears the
+previous acceptance. Old proposals remain available for inspection. Update your
+source repository from its remote yourself before syncing.
+
 ## Use a real agent
 
 Install and authenticate the Codex CLI, then set `"backend": "codex"` in your configuration. OpenDots asks Codex for structured plans and executes permitted actions through its own tool registry. You can configure workers, models, subscriptions, write scopes, required checks, schedules, and providers.

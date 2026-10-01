@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import uuid
 
 from .tools import bounded_process
 
@@ -26,6 +27,20 @@ class Workspaces:
         self.root.mkdir(parents=True, exist_ok=True)
         self.store = store
 
+    @staticmethod
+    def snapshot(source, repository, branch="main"):
+        from .evidence import workspace_fingerprint
+        before = workspace_fingerprint(source)
+        repository.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, repository, symlinks=True,
+                        ignore=shutil.ignore_patterns(".git", ".env*", ".aws", ".ssh", ".codex", "__pycache__", "node_modules", ".venv", "venv", ".opendots", ".spots"))
+        if workspace_fingerprint(source) != before:
+            raise ValueError("Source changed during snapshot; stop source edits and retry")
+        git(repository, "init", f"--initial-branch={branch}")
+        git(repository, "add", "-A")
+        git(repository, "commit", "--allow-empty", "-m", "Snapshot owner-configured target workspace")
+        return git(repository, "rev-parse", "HEAD")
+
     def prepare(self, target, work):
         if work.get("workspace"):
             path = Path(work["workspace"])
@@ -35,18 +50,14 @@ class Workspaces:
         if self.root.resolve().is_relative_to(target.workspace.resolve()):
             raise ValueError("Managed storage must be outside the source workspace")
         key = hashlib.sha256(target.id.encode()).hexdigest()[:16]
+        state = self.store.state(target.id)
+        key += state.get("source_generation", "")
         repository = self.root / "repositories" / key
         if not (repository / ".git").is_dir():
             if repository.exists():
                 shutil.rmtree(repository)
-            repository.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(target.workspace, repository, symlinks=True,
-                            ignore=shutil.ignore_patterns(".git", ".env*", ".aws", ".ssh", ".codex", "__pycache__", "node_modules", ".venv", "venv", ".opendots", ".spots"))
-            git(repository, "init", "--initial-branch=main")
-            git(repository, "add", "-A")
-            git(repository, "commit", "--allow-empty", "-m", "Snapshot owner-configured target workspace")
-        state = self.store.state(target.id)
-        base = state.get("accepted_branch", "main")
+            self.snapshot(target.workspace, repository, state.get("source_base_ref", "main"))
+        base = state.get("accepted_branch", state.get("source_base_ref", "main"))
         branch = f"opendots/{key}/task-{work['id']}"
         directory = self.root / "tasks" / str(work["id"])
         directory.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +107,7 @@ class Workspaces:
                 return {"work_id": work_id, "accepted_commit": expected_commit}
             if db.execute("SELECT 1 FROM work WHERE target_id=? AND status IN ('running','ready','waiting_approval')", (target_id,)).fetchone():
                 raise ValueError("Pause the target and finish or cancel active work before accepting")
-            if proposal["base_ref"] != state.get("accepted_branch", "main"):
+            if proposal["base_ref"] != state.get("accepted_branch", state.get("source_base_ref", "main")):
                 raise ValueError("Proposal has a stale base; submit fresh work against the accepted base")
             directory = Path(proposal["workspace"])
             if git(directory, "rev-parse", "HEAD") != expected_commit or git(directory, "status", "--porcelain", "--untracked-files=all"):
@@ -105,3 +116,22 @@ class Workspaces:
             db.execute("UPDATE targets SET state=? WHERE id=?", (json.dumps(state), target_id))
             self.store.log(db, "proposal_accepted", proposal, target_id, work_id)
             return {"work_id": work_id, "accepted_commit": expected_commit}
+
+    def sync(self, target):
+        """Call with the scheduler process lock held; preserve every old generation."""
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT 1 FROM work WHERE target_id=? AND status IN ('running','ready','waiting_approval')", (target.id,)).fetchone():
+                raise ValueError("Finish or cancel active work before refreshing the source")
+            state = json.loads(db.execute("SELECT state FROM targets WHERE id=?", (target.id,)).fetchone()[0])
+            generation = "-" + uuid.uuid4().hex
+            base = "source/" + generation[1:]
+            key = hashlib.sha256(target.id.encode()).hexdigest()[:16] + generation
+            repository = self.root / "repositories" / key
+            commit = self.snapshot(target.workspace, repository, base)
+            previous = {name: state.pop(name, None) for name in ("accepted_branch", "accepted_commit", "accepted_work_id")}
+            state.update(source_generation=generation, source_base_ref=base, source_commit=commit)
+            db.execute("UPDATE targets SET state=? WHERE id=?", (json.dumps(state), target.id))
+            result = {"target_id": target.id, "source": str(target.workspace), "base_ref": base, "commit": commit, "previous_acceptance": previous}
+            self.store.log(db, "source_synchronized", result, target.id)
+            return result
