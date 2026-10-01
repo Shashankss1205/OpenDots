@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 let current = null;
 const el = (tag, className, text) => {const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node;};
 async function request(path, body) {
-  const response = await fetch(path, body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Spots-Request': 'dashboard'}, body: JSON.stringify(body)});
+  const response = await fetch(path, body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json', 'X-OpenDots-Request': 'dashboard'}, body: JSON.stringify(body)});
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data;
@@ -75,6 +75,7 @@ function render(data) {
   if (Array.from(picker.options).map(o=>o.value).join('|') !== data.targets.map(t=>t.id).join('|')) {
     picker.replaceChildren(...data.targets.map(t=>{const option=el('option',null,t.name||t.id);option.value=t.id;return option;}));
     if (data.targets.some(t=>t.id===previous)) picker.value=previous;
+    suggestEventFields();
   }
   const approvals = data.work.filter(w=>w.status==='waiting_approval');
   // Keep diff scroll position and focused decision buttons stable between polling cycles.
@@ -114,7 +115,16 @@ function render(data) {
 }
 let loading=false;
 async function refresh(){if(loading)return;loading=true;try{render(await request('/api/state'));}catch(e){$('connection').textContent='Connection lost';showError(e);}finally{loading=false;}}
-$('event-form').addEventListener('submit',async(event)=>{event.preventDefault();try{await request('/api/events',{type:$('event-type').value,target_id:$('event-target').value,priority:Number($('event-priority').value),source:'local',payload:{title:$('event-title').value}});$('error').hidden=true;await refresh();}catch(e){showError(e);}});
+function suggestEventFields(){
+  const target=current?.targets.find(t=>t.id===$('event-target').value);
+  const rules=target?.subscriptions||[];
+  $('event-repo').value=rules.flatMap(r=>r.repos||[])[0]||'';
+  $('event-source').value=rules.flatMap(r=>r.sources||[])[0]||'local';
+  const type=rules.flatMap(r=>r.types||[]).find(t=>!t.includes('*')&&!t.includes('?'));
+  if(type)$('event-type').value=type;
+}
+$('event-target').addEventListener('change',suggestEventFields);
+$('event-form').addEventListener('submit',async(event)=>{event.preventDefault();try{const result=await request('/api/events',{type:$('event-type').value,target_id:$('event-target').value,priority:Number($('event-priority').value),source:$('event-source').value,payload:{title:$('event-title').value,repo:$('event-repo').value}});$('error').hidden=true;$('event-result').textContent=result.duplicate?'Event already received.':result.queued?`Queued ${result.queued} work item(s).`:'Event recorded, but no work was queued. Check the target subscription, repository, source and priority.';await refresh();}catch(e){showError(e);}});
 $('close-evidence').addEventListener('click',()=>$('evidence-dialog').close());
 $('sample').addEventListener('click',async()=>{
   const button=$('sample');button.disabled=true;
