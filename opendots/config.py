@@ -19,6 +19,7 @@ class Target:
     agent: str | None = None
     write_paths: tuple[str, ...] = ("*",)
     required_checks: tuple[str, ...] = ()
+    success_conditions: tuple[dict, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,16 @@ def validate_config(raw):
         for name, command in target.get("checks", {}).items():
             if not isinstance(command,list) or not command or any(not isinstance(v,str) for v in command):
                 raise ValueError(f"{prefix}.checks.{name} must be a nonempty argv array")
+        conditions = target.get("success_conditions", [])
+        if not isinstance(conditions,list):
+            raise ValueError(f"{prefix}.success_conditions must be an array")
+        for condition in conditions:
+            if not isinstance(condition,dict) or not all(isinstance(condition.get(k),str) and condition[k] for k in ("name","path")):
+                raise ValueError(f"{prefix}.success_conditions need name and path")
+            if condition.get("format","text") not in {"text","json"} or ("equals" in condition) == ("minimum" in condition):
+                raise ValueError(f"{prefix}.success_conditions need a supported format and exactly one comparator")
+            if "minimum" in condition and type(condition["minimum"]) not in (int,float):
+                raise ValueError(f"{prefix}.success_conditions.minimum must be numeric")
         priority = target.get("minimum_priority",20)
         if type(priority) is not int or not 0 <= priority <= 100:
             raise ValueError(f"{prefix}.minimum_priority must be an integer from 0 to 100")
@@ -122,7 +133,7 @@ def load_config(path: Path) -> Config:
                               tuple(subscriptions), policy, item.get("recipes", {}),
                               item.get("checks", {}), int(item.get("minimum_priority", 20)),
                               item.get("desired_state", {}), tuple(item.get("skills", [])), item.get("agent"),
-                              tuple(item.get("write_paths", ["*"])), tuple(required_checks)))
+                              tuple(item.get("write_paths", ["*"])), tuple(required_checks), tuple(item.get("success_conditions", []))))
     workers = int(raw.get("workers", 4))
     if workers < 1:
         raise ValueError("workers must be positive")

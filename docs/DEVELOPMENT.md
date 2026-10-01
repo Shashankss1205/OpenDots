@@ -74,3 +74,15 @@ configure `required_checks` explicitly before enabling writes. Investigation-onl
 targets may leave it empty; their completion summary reports no checks.
 Failed checks return diagnostics to real planners for up to `max_repair_attempts`
 (default 2), still bounded by `max_planning_rounds`. Set zero to disable repair.
+
+## Observable goals
+
+Targets may define `success_conditions`, independently checked before completion:
+
+```json
+{"name":"replicas","path":"deployment.json","format":"json","pointer":"/spec/replicas","minimum":2}
+```
+
+Use `equals` for exact typed JSON/text equality, or `minimum` for numbers.
+Text is the default format. Conditions complement required checks and do not
+claim to prove arbitrary natural-language goals. Every configured condition must pass.

@@ -212,3 +212,13 @@ class AuditFixTests(unittest.TestCase):
             store.pause('t',True);self.assertIsNone(store.claim(['t']))
             store.pause('t',False);work=store.claim(['t']);self.assertIsNotNone(work)
             store.cancel(work['id']);self.assertTrue(store.cancellation_requested(work['id']))
+
+    def test_goal_conditions_measure_actual_file_state(self):
+        from dataclasses import replace
+        from opendots.goals import evaluate
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'state.json').write_text('{"replicas":0}')
+            target=Target('t','T','Test',root,(),{},success_conditions=({'name':'available','path':'state.json','format':'json','pointer':'/replicas','minimum':2},))
+            self.assertFalse(evaluate(target)[0]['passed'])
+            (root/'state.json').write_text('{"replicas":2}')
+            self.assertTrue(evaluate(target)[0]['passed'])

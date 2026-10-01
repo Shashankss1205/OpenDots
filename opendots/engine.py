@@ -187,6 +187,10 @@ class Engine:
             missing = set(target.required_checks) - self._passed_checks(work, target)
             if missing:
                 raise ValueError("Required completion checks lack current evidence: " + ", ".join(sorted(missing)))
+            from .goals import evaluate
+            goals = evaluate(target)
+            if any(not goal["passed"] for goal in goals):
+                raise ValueError("Owner-defined success conditions are not satisfied: " + json.dumps(goals))
             artifact = self.workspaces.finalize(work)
             if set(target.required_checks) - self._passed_checks(work, target):
                 raise ValueError("Workspace changed while retaining the artifact; completion evidence is stale")
@@ -198,6 +202,11 @@ class Engine:
                 "No configured checks were requested. ") + (
                 "Retained the local change proposal branch and patch." if artifact["changed"] else
                 "Recorded the investigation and target memory.")
+            if evaluate(target) != goals:
+                raise ValueError("Success conditions changed during artifact retention")
+            if goals:
+                with self.store.connect() as db:
+                    self.store.log(db,"goals_verified",goals,target.id,work["id"])
             self.store.finish(work, artifact=artifact)
         except Exception as exc:
             self.store.finish(work, "failed", str(exc)[:8000])
@@ -208,7 +217,7 @@ class Engine:
                            "fingerprint": workspace_fingerprint(target.workspace),
                            "checks": target.checks, "sandbox": self.registry.sandbox,
                            "policy": target.policy, "write_paths": target.write_paths,
-                           "required_checks": target.required_checks}, sort_keys=True)
+                           "required_checks": target.required_checks, "success_conditions": target.success_conditions}, sort_keys=True)
 
     def _passed_checks(self, work, target):
         from .evidence import check_signature, workspace_fingerprint
