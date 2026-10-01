@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from dataclasses import asdict
 import json
 import hashlib
 from pathlib import Path
@@ -61,6 +62,14 @@ class Store:
             for target in targets:
                 db.execute("INSERT OR IGNORE INTO targets VALUES(?,?)", (target.id, json.dumps({"completed": 0, "notes": [],
                     "desired_state": target.desired_state, "actual_state": {"open_issues": [], "stars_observed": 0}, "artifacts": []})))
+                state = json.loads(db.execute("SELECT state FROM targets WHERE id=?", (target.id,)).fetchone()[0])
+                revision = hashlib.sha256(json.dumps(asdict(target), sort_keys=True, default=str).encode()).hexdigest()
+                if state.get("config_revision") != revision:
+                    previous = state.get("config_revision")
+                    state.update(desired_state=target.desired_state, config_revision=revision)
+                    db.execute("UPDATE targets SET state=? WHERE id=?", (json.dumps(state), target.id))
+                    self.log(db, "target_configuration_changed", {"previous": previous, "revision": revision}, target.id)
+
 
     @staticmethod
     def log(db, kind, detail, target_id=None, work_id=None):
