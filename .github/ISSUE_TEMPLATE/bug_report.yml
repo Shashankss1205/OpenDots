@@ -1,0 +1,24 @@
+name: Bug report
+description: Report reproducible OpenDots behavior
+title: "Bug: "
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Smallest steps or sanitized configuration that reproduce the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and evidence
+      description: OpenDots version, Python/OS, sandbox mode, and relevant sanitized logs. Do not include credentials or private source.
+    validations:
+      required: true
