@@ -14,6 +14,7 @@ HELP = '''/agents                 List agents and their status
 /approve ID             Request approval confirmation after review
 /reject ID              Reject a reviewed action
 /activity               Recent activity for the selected agent
+/status                 Connector health, queue age and planning usage
 /pause or /resume       Pause or resume the selected agent
 /send TYPE MESSAGE      Send a particular event type
 /help                   Show this help
@@ -106,6 +107,8 @@ class Session:
                 return f'Type approve {work_id} to confirm this exact action. Anything else cancels.'
             self.client.request(f'/api/work/{work_id}/decision',{'approved':False,'approval_token':work['approval_token']})
             return f'Rejected work #{work_id}.'
+        if command=='/status':
+            return json.dumps({'sources':self.state.get('sources',[]),'metrics':self.state.get('metrics',{})},indent=2)
         if command=='/activity':
             return '\n'.join(f"{a['kind'].replace('_',' ')} | work {a['work_id'] or '-'} | {json.dumps(a['detail'])}" for a in reversed(self.state['audit'][:50]) if a['target_id'] in {None,self.selected}) or 'No recent activity.'
         if command in {'/pause','/resume'}:

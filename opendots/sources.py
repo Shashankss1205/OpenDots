@@ -180,6 +180,7 @@ class SourceRegistry:
         state = json.loads(row[0]) if row else {}
         if state.get("next_poll", 0) > now:
             return
+        started=time.monotonic()
         try:
             if source_id not in self.instances:
                 self.instances[source_id] = self.factories[config["kind"]](config)
@@ -192,6 +193,8 @@ class SourceRegistry:
                         raise
                     with self.store.connect() as db:
                         self.store.log(db, "source_record_rejected", {"source":source_id,"event":event,"error":str(exc)[:1000]})
+            next_state.update(last_success=now,last_error=None,consecutive_failures=0,
+                              last_event_count=len(events),duration_seconds=time.monotonic()-started)
             next_state["next_poll"] = now + max(1, int(next_state.get("poll_interval", config.get("interval_seconds", 5))))
             with self.store.connect() as db:
                 db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state",
@@ -200,6 +203,7 @@ class SourceRegistry:
                     self.store.log(db, "source_record_rejected", {"source":source_id, **record})
                 self.store.log(db, "source_polled", {"source": source_id, "events": len(events)})
         except Exception as exc:
+            state.update(last_error=str(exc)[:1000],last_failure=now,consecutive_failures=state.get("consecutive_failures",0)+1)
             state["next_poll"] = now + max(30, int(config.get("interval_seconds", 60)))
             with self.store.connect() as db:
                 db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state", (source_id, json.dumps(state)))

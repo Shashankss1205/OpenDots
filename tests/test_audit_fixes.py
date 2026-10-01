@@ -328,3 +328,15 @@ class AuditFixTests(unittest.TestCase):
             with self.assertRaises(BudgetExceeded):Store(path).reserve_model_call('a',1,2)
             store.reserve_model_call('b',10,2)
             with self.assertRaises(BudgetExceeded):store.reserve_model_call('c',10,2)
+
+    def test_source_health_records_failures(self):
+        from opendots.store import Store
+        from opendots.sources import SourceRegistry
+        with tempfile.TemporaryDirectory() as directory:
+            store=Store(Path(directory)/'state.db')
+            sources=SourceRegistry(({'id':'bad','kind':'missing'},),store)
+            sources.poll_due(lambda event:None,now=100)
+            health=store.snapshot()['sources'][0]
+            self.assertEqual(health['consecutive_failures'],1)
+            self.assertIsNotNone(health['last_error'])
+            self.assertIn('planning_calls_today',store.snapshot()['metrics'])
