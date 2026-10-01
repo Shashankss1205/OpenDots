@@ -57,7 +57,7 @@ from managed snapshots and blocked by application file tools.
 Protocol tests exercise a controlled subprocess, large structured output,
 malformed/error responses, authentication diagnostics and real OpenDots approval
 handling. They do not prove a successful live Claude model response. Verify with
-your installed, authenticated CLI using the goal-and-heartbeat walkthrough.
+your installed, authenticated CLI using the [goal-and-heartbeat walkthrough](GOALS_AND_EVENTS.md).
 
 Official references: [CLI options](https://code.claude.com/docs/en/cli-reference),
 [programmatic use](https://code.claude.com/docs/en/headless).
