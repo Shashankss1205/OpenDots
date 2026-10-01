@@ -3,6 +3,14 @@ import json
 
 
 def validate(value, schema, path='arguments'):
+    if 'anyOf' in schema:
+        for alternative in schema['anyOf']:
+            try:
+                validate(value, alternative, path)
+                return
+            except ValueError:
+                pass
+        raise ValueError(f'{path} does not match an allowed variant')
     kind=schema.get('type')
     valid={'string':lambda v:isinstance(v,str),'boolean':lambda v:type(v) is bool,
            'integer':lambda v:type(v) is int,'number':lambda v:type(v) in (int,float),

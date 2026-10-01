@@ -67,6 +67,8 @@ class Engine:
         self.plugins = PluginManager(self.agents, self.registry, self.sources)
         load_builtins(self.plugins, config, local_tools=registry is None, providers=agents is None)
         self.plugins.load_installed(config.plugins, config.plugin_config)
+        from .model_providers import ProviderContext
+        self.plugins.configure_providers(config.providers, ProviderContext(config, self.registry))
         self.sources.validate_configs()
         from .notifications import NotificationDispatcher, validate_routes
         validate_routes(config.notifications, self.plugins.notifications, self.targets)
@@ -257,14 +259,14 @@ class Engine:
     def _assess_relevance(self, target, work):
         if target.relevance.get("mode", "off") != "model":
             return True
+        provider = self.agent or self.agents.get(target.agent or self.config.backend)
         assessment_key = hashlib.sha256(json.dumps({"goal": target.objective, "desired_state": target.desired_state,
             "relevance": target.relevance, "provider": target.agent or self.config.backend,
-            "model": self.config.model}, sort_keys=True).encode()).hexdigest()
+            "model": getattr(provider, "model", self.config.model), "profile": getattr(provider, "identity", None)}, sort_keys=True).encode()).hexdigest()
         previous = self.store.relevance_decision(work["event_id"], target.id)
         # An action awaiting approval resumes without a second assessment or model charge.
         if previous and previous.get("status") == "relevant" and previous.get("assessment_key") == assessment_key:
             return True
-        provider = self.agent or self.agents.get(target.agent or self.config.backend)
         try:
             if not callable(getattr(provider, "assess_relevance", None)):
                 raise ValueError("Provider does not implement goal relevance; configure a supported provider or explicitly turn relevance off")
@@ -413,6 +415,10 @@ class Engine:
                     running.add(pool.submit(self.process, work))
                 self.stop_event.wait(0.1)
 
+    def provider_snapshot(self):
+        from .model_providers import provider_snapshot
+        return provider_snapshot(self.config, self.agents, self.plugins)
+
     def snapshot(self):
         data = self.store.snapshot()
         for target in data["targets"]:
@@ -424,6 +430,7 @@ class Engine:
                     source_names=[item["id"] for item in self.config.sources], agent_names=list(self.agents.agents))
         data["listeners"] = self.listeners()
         data["event_stream"] = self.store.events(limit=20)
+        data["providers"] = self.provider_snapshot()
         data["notifications"] = self.notifications.snapshot()
         return data
 

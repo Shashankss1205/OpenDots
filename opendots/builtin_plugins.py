@@ -59,6 +59,8 @@ def load_builtins(manager, config, *, local_tools=True, providers=True):
             config.context_limits, config.planner_env, config.planner_home)))
         if config.backend == "demo" or any(t.agent == "demo" for t in config.targets):
             add("demo", "Explicit optional deterministic examples", lambda api: api.agents.register("demo", DemoAgent()))
+    from .model_providers import register_builtins
+    add("models", "Named API, local model and CLI provider profiles", register_builtins)
     add("github", "GitHub repository activity polling", lambda api: api.sources.register(
         "github_poll", GitHubPollSource, validate_config=validate_github))
     add("jsonl", "Append-only JSON event inbox", lambda api: api.sources.register(

@@ -4,13 +4,13 @@
 
 **Give an agent your goal. Connect the information it needs. Review the work it proposes.**
 
-OpenDots runs on your computer and coordinates Claude Code or Codex around a goal you choose. It listens for incoming information, keeps task history and notes, and can check progress on a schedule. You choose the project, allowed changes, checks, and approval rules.
+OpenDots runs on your computer and coordinates CLI agents, cloud models or local Ollama models around a goal you choose. It listens for incoming information, keeps task history and notes, and can check progress on a schedule. You choose the project, allowed changes, checks, and approval rules.
 
 A **heartbeat** is a scheduled check-in. An **event** is a message from you or a connected tool. A **target** is one configured agent with its own goal. The **runtime** is the process you leave running.
 
 ## What can it do?
 
-- Pursue your saved goal using Claude Code or Codex.
+- Pursue your saved goal using Claude Code, Codex, OpenAI, Anthropic, compatible APIs or Ollama.
 - React to terminal requests, local HTTP messages, JSONL files, and GitHub activity.
 - Assess matching events against each goal, with a visible confidence estimate and reason.
 - Revisit progress on a configurable heartbeat schedule.
@@ -27,7 +27,7 @@ Inspect loaded integrations with `opendots plugins`, `/plugins` in the TUI, or *
 ## What you need
 
 - **Linux, Python 3.11+, Git, and Bubblewrap** with working namespaces for isolated checks.
-- **Claude Code or Codex CLI**, installed and signed in. See [provider setup](docs/PROVIDERS.md).
+- **Model access**: a signed-in Claude Code/Codex CLI, an API key, or a running Ollama server with a model. See [provider setup](docs/PROVIDERS.md).
 - **Your own project directory and a goal** you want the agent to pursue.
 
 On Ubuntu/Debian, install prerequisites with `sudo apt-get install python3 python3-venv git bubblewrap curl`. Check `python3 --version` is at least 3.11. Docker and a GitHub token are not needed to start.
@@ -72,7 +72,7 @@ First sign in to your chosen CLI (`claude auth login`, or `codex login`). From y
 opendots init --workspace "$PWD" --goal "Describe what you want this agent to achieve" --backend claude
 ```
 
-Use `--backend codex` if that is your provider. No sample project, predefined repair, or demo event is created.
+Use `--backend codex` if that is your provider. For OpenAI, Anthropic, compatible APIs or Ollama, follow the [model setup commands](docs/PROVIDERS.md#direct-apis-and-local-models). No sample project, predefined repair, or demo event is created.
 
 The command prints your configuration path. By default it is `~/.config/opendots/config.json` (or under `XDG_CONFIG_HOME`). Open that file to review your saved goal and settings. Normal setup starts with **reads and notes allowed, no writable paths, no configured checks, model goal-relevance assessment enabled, and no heartbeat**. Before enabling changes, set `write_paths`, `checks`, and `required_checks` for your project.
 
@@ -118,6 +118,7 @@ Then type a normal message about your goal. It becomes an `owner.request` event 
 | `/events` / `/event ID` | Browse received events and inspect payloads, routing reasons, and confidence. |
 | `/send TYPE MESSAGE` | Create a message with your chosen event type. |
 | `/connect` | Learn how to connect an event producer. |
+| `/providers` | Show models, provider profiles and agent assignments. |
 | `/status` | Show the provider, source health, and model usage. |
 | `/activity` | See what is happening. |
 | `/reviews` | Find work waiting for approval. |
@@ -157,7 +158,7 @@ Native Slack, email, Kafka, Redis, and arbitrary filesystem-watch adapters are n
 
 - [Plugins](docs/PLUGINS.md): install packages and build providers, tools, polling adapters or persistent listeners.
 - [Events and listeners](docs/EVENTS.md): create messages, connect tools, inspect history and relevance.
-- [Provider setup](docs/PROVIDERS.md): Claude Code and Codex authentication.
+- [Provider setup](docs/PROVIDERS.md): CLI authentication, API keys, local models and per-agent model profiles.
 - [Implementation](docs/IMPLEMENTATION.md): configuration, policies, event routing, and storage.
 - [Development and operations](docs/DEVELOPMENT.md): checks, packaging, services, backup, and source refresh.
 - [Validation](docs/VALIDATION.md): tested behavior and remaining live-provider validation.

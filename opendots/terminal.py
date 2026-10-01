@@ -15,6 +15,7 @@ HELP = '''/agents                 List agents and their status
 /reject ID              Reject a reviewed action
 /activity               Recent activity for the selected agent
 /listeners              Configured sources, schedules and subscriptions
+/providers              Models, provider profiles and target assignments
 /plugins                Loaded plugins, versions and capabilities
 /notifications          Destinations and notification delivery status
 /events [TEXT]          Browse received events, including ignored ones
@@ -136,6 +137,13 @@ class Session:
             if not data['destinations']: lines.append('No destinations configured. See docs/NOTIFICATIONS.md.')
             for delivery in data['deliveries'][:20]:
                 lines.append(f"{delivery['id']} | {delivery['route_id']} | {delivery['status']} | attempts {delivery['attempts']}")
+            return '\n'.join(lines)
+        if command == '/providers':
+            data = self.client.request('/api/providers')
+            lines = ['MODEL PROVIDERS | default: ' + data['default']]
+            for provider in data['providers']:
+                lines.append(f"{provider['id']} | {provider['kind']} | {provider['model'] or 'provider default'} | {provider['status']} | targets: {', '.join(provider['targets']) or 'none'}")
+            lines.append('Available kinds: ' + ', '.join(data['available_kinds']))
             return '\n'.join(lines)
         if command == '/plugins':
             data = self.client.request('/api/plugins')

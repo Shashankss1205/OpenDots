@@ -38,6 +38,7 @@ class PluginAPI:
     config: dict
     version: int = API_VERSION
     notifications: object = None
+    providers: object = None
 
 
 class _Registration:
@@ -53,18 +54,20 @@ class _SourceRegistration(_Registration):
 
 
 class PluginManager:
-    def __init__(self, agents, tools, sources, notifications=None):
+    def __init__(self, agents, tools, sources, notifications=None, providers=None):
         self.agents, self.tools, self.sources = agents, tools, sources
         from .notifications import NotificationRegistry
         self.notifications = notifications if notifications is not None else NotificationRegistry()
+        from .model_providers import ProviderRegistry
+        self.providers = providers if providers is not None else ProviderRegistry()
         self.records = []
-        self.owners = {"agents": {}, "tools": {}, "sources": {}, "notifications": {}}
+        self.owners = {"agents": {}, "tools": {}, "sources": {}, "notifications": {}, "providers": {}}
         for capability, values in self._capabilities().items():
             self.owners[capability].update({name: "application" for name in values})
 
     def _capabilities(self):
         return {"agents": self.agents.agents, "tools": self.tools.handlers,
-                "sources": self.sources.factories, "notifications": self.notifications.factories}
+                "sources": self.sources.factories, "notifications": self.notifications.factories, "providers": self.providers.factories}
 
     def load(self, plugin, config=None, *, origin="installed", legacy=False):
         manifest = plugin.manifest
@@ -94,15 +97,17 @@ class PluginManager:
         sources.modes, sources.validators = dict(self.sources.modes), dict(self.sources.validators)
         notifications = copy(self.notifications)
         notifications.factories, notifications.validators = dict(self.notifications.factories), dict(self.notifications.validators)
+        providers = copy(self.providers)
+        providers.factories, providers.validators = dict(self.providers.factories), dict(self.providers.validators)
         before = {kind: set(entries) for kind, entries in self._capabilities().items()}
         if legacy:
             from .extensions import ExtensionAPI
             api = ExtensionAPI(agents, tools, sources)
         else:
             api = PluginAPI(_Registration(agents), _Registration(tools), _SourceRegistration(sources), options,
-                            notifications=_Registration(notifications))
+                            notifications=_Registration(notifications), providers=_Registration(providers))
         plugin.register(api)
-        after = {"agents": agents.agents, "tools": tools.handlers, "sources": sources.factories, "notifications": notifications.factories}
+        after = {"agents": agents.agents, "tools": tools.handlers, "sources": sources.factories, "notifications": notifications.factories, "providers": providers.factories}
         for kind, entries in self._capabilities().items():
             if any(name not in after[kind] or after[kind][name] is not value for name, value in entries.items()):
                 raise ValueError(f"Plugin {manifest.id} cannot replace existing {kind}")
@@ -115,12 +120,15 @@ class PluginManager:
         self.sources.validators.update(sources.validators)
         self.notifications.factories.update(notifications.factories)
         self.notifications.validators.update(notifications.validators)
+        self.providers.factories.update(providers.factories)
+        self.providers.validators.update(providers.validators)
         # Legacy providers may retain their API registries for later schema generation.
         # Keep those views live after commit so subsequent plugins remain visible.
         agents.agents = self.agents.agents
         tools.handlers, tools.arg_names, tools.schemas = self.tools.handlers, self.tools.arg_names, self.tools.schemas
         sources.factories, sources.modes, sources.validators = self.sources.factories, self.sources.modes, self.sources.validators
         notifications.factories, notifications.validators = self.notifications.factories, self.notifications.validators
+        providers.factories, providers.validators = self.providers.factories, self.providers.validators
         capabilities = {kind: sorted(set(values) - before[kind]) for kind, values in after.items()}
         for kind, names in capabilities.items():
             self.owners[kind].update({name: manifest.id for name in names})
@@ -157,6 +165,22 @@ class PluginManager:
             if candidate.manifest.id != name:
                 raise ValueError(f"Plugin manifest ID must match entry point name: {name}")
             self.load(candidate, configs.get(name), legacy=legacy)
+
+    def configure_providers(self, profiles, context):
+        from .model_providers import validate_profiles
+        validate_profiles(profiles, self.providers)
+        staged = copy(self.agents)
+        staged.agents = dict(self.agents.agents)
+        for profile in profiles:
+            provider = self.providers.factories[profile["kind"]](deepcopy(profile), context)
+            staged.register(profile["id"], provider)
+        self.agents.agents.update(staged.agents)
+        for profile in profiles:
+            owner = self.owners["providers"].get(profile["kind"], "application")
+            self.owners["agents"][profile["id"]] = owner
+            for record in self.records:
+                if record["id"] == owner:
+                    record["capabilities"]["agents"].append(profile["id"])
 
     def snapshot(self):
         # Deliberately excludes options, credentials, plugin objects and arbitrary runtime state.

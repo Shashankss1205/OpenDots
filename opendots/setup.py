@@ -12,7 +12,7 @@ def default_config():
     return Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home()/'.config'))) / 'opendots/config.json'
 
 
-def initialize(directory=None, workspace=None, backend='claude', goal=None, demo=False, heartbeat=0):
+def initialize(directory=None, workspace=None, backend='claude', goal=None, demo=False, heartbeat=0, *, model=None, base_url=None, api_key_env=None):
     root = Path(directory) if directory else Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home()/'.config')))/'opendots'
     root = root.expanduser().resolve()
     destination = root/'config.json'
@@ -20,6 +20,15 @@ def initialize(directory=None, workspace=None, backend='claude', goal=None, demo
         raise ValueError(f'Configuration already exists: {destination}')
     if type(heartbeat) is not int or heartbeat < 0:
         raise ValueError('Heartbeat must be zero (off) or a positive number of seconds')
+    from .model_providers import HTTP_KINDS, validate_builtin
+    provider = None
+    if not demo and backend in HTTP_KINDS:
+        provider = {'id': backend, 'kind': backend, 'model': model}
+        if base_url is not None: provider['base_url'] = base_url
+        if api_key_env is not None: provider['api_key_env'] = api_key_env
+        validate_builtin(provider)
+    elif base_url is not None or api_key_env is not None or (demo and model is not None):
+        raise ValueError('Provider API flags require an API backend and cannot be used with --demo')
     if demo:
         if workspace or goal or heartbeat:
             raise ValueError('--demo cannot be combined with a workspace, goal, or heartbeat')
@@ -47,6 +56,10 @@ def initialize(directory=None, workspace=None, backend='claude', goal=None, demo
             'write_paths': [], 'checks': {}, 'required_checks': [],
             'relevance': {'mode': 'model', 'minimum_confidence': 0.7}}],
             'sources': [], 'schedules': []}
+        if provider:
+            config['providers'] = [provider]
+        elif model is not None:
+            config['model'] = model
         if heartbeat:
             config['schedules'] = [{'id': 'project-heartbeat', 'target_id': 'project',
                 'type': 'timer.heartbeat', 'interval_seconds': heartbeat,
@@ -84,6 +97,23 @@ def diagnose(config_path):
                 add(provider+'_authentication', result.returncode == 0, 'Authenticated' if result.returncode == 0 else 'Run '+login)
             except (OSError, subprocess.TimeoutExpired):
                 add(provider+'_authentication', False, 'Authentication probe failed or timed out')
+    # Load capability contracts without creating a database or connecting sources/models.
+    from .agents import AgentRegistry
+    from .tools import ToolRegistry
+    from .sources import SourceRegistry
+    from .plugins import PluginManager
+    from .builtin_plugins import load_builtins
+    from .model_providers import ProviderContext, provider_snapshot
+    manager = PluginManager(AgentRegistry(), ToolRegistry(config.sandbox, builtins=False), SourceRegistry((), None, builtins=False))
+    load_builtins(manager, config)
+    manager.load_installed(config.plugins, config.plugin_config)
+    manager.configure_providers(config.providers, ProviderContext(config, manager.tools))
+    selected = {target.agent or config.backend for target in config.targets}
+    for name in selected: manager.agents.get(name)
+    for row in provider_snapshot(config, manager.agents, manager)['providers']:
+        if row['id'] not in selected or row['id'] in {'claude', 'codex'}: continue
+        status = row['status']
+        add('provider:' + row['id'], not status.startswith('missing credential') and status != 'CLI executable missing', status)
     if config.sandbox == 'bubblewrap':
         from .sandbox import sandbox_command
         try:

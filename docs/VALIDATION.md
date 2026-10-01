@@ -121,3 +121,19 @@ payload formats, redirect rejection, persisted outbox replay, stable retry IDs,
 credential/configuration changes, capacity backlogs, transactional rollback,
 plugin rollback and the actual task-completion audit path. No live Slack or
 Discord message was sent. The browser gate verifies notification/plugin visibility.
+
+## Configurable model providers
+
+The portable suite passes 141 tests (two namespace-only checks skipped locally).
+Eleven new tests exercise real loopback HTTP boundaries for OpenAI Responses,
+Anthropic Messages, compatible Chat Completions and Ollama chat. Coverage includes
+relevance, planning, exact-plan approvals, call budgets, error-body redaction,
+refusal/truncation/invalid-output rejection, no automatic retry, missing credentials,
+optional-argument compatibility, original relevance bounds, profile cache changes,
+transactional plugin registration, CLI profile isolation and CLI/TUI/API inventory.
+The browser CI also checks model-provider visibility. Wheel creation passes.
+
+These controlled transport tests do not establish live API authentication, model
+availability or every compatible server's dialect. No authenticated cloud model
+request or local Ollama inference was performed for this change. Follow
+[provider setup](PROVIDERS.md#direct-apis-and-local-models) with your chosen model.
