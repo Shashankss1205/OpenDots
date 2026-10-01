@@ -61,7 +61,7 @@ Use the relaxed test command only for explicitly trusted disposable fixtures wit
 
 ## Deployment and extensions
 
-`docker compose up --build` uses the optional Git/bubblewrap image, loopback host port and persistent `.opendots`. Nested namespaces depend on the host. Codex and credentials are not bundled. `deploy/opendots.service.example` is an editable systemd template. Template execution is not part of current validation.
+`docker compose up --build --wait` installs the package and runs as UID 10001, binds the host port to loopback, and initializes demo configuration in the named `opendots-data` volume. The volume persists configuration, fixture sources and runtime data across container restarts. `docker compose down --volumes` deletes it. Codex and credentials are not bundled; mount an owner-configured setup and set `OPENDOTS_CONFIG` for real targets. Nested Bubblewrap namespaces depend on the host and fail closed when unavailable. Container CI validates installation, startup, non-root execution, health and restart; it does not establish nested sandbox or live-planner acceptance. `opendots service install` creates a user systemd unit; `deploy/opendots.service.example` is an editable alternative. Use an absolute `codex_command` if the CLI is outside the service PATH.
 
 The dashboard is a local control surface. Public hosting needs deliberate authentication/proxy design; request guards are not a multi-user login system.
 

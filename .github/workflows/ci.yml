@@ -49,3 +49,25 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y bubblewrap
       - name: Real namespace regression tests
         run: python -m unittest discover -s tests -v
+  container:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start installed runtime in container
+        run: docker compose up --build --wait --wait-timeout 120
+      - name: Verify non-root user, persistent config and HTTP API
+        run: |
+          test "$(docker compose exec -T opendots id -u)" = 10001
+          curl --fail http://127.0.0.1:8765/api/health
+          docker compose exec -T opendots test -f /data/config.json
+          docker compose restart
+          for attempt in $(seq 1 30); do
+            if curl --fail http://127.0.0.1:8765/api/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Logs and cleanup
+        if: always()
+        run: |
+          docker compose logs
+          docker compose down --volumes

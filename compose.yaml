@@ -4,7 +4,14 @@ services:
     ports:
       - "127.0.0.1:8765:8765"
     volumes:
-      - ./.opendots:/app/.opendots
-      - ./examples/workspaces:/app/examples/workspaces
+      - opendots-data:/data
     init: true
     stop_grace_period: 240s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+volumes:
+  opendots-data:
