@@ -19,7 +19,7 @@ class MaintenanceTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         source = self.root/'source'; source.mkdir(); (source/'value').write_text('original')
         target = Target('t','T','Test',source,({'types':['test']},),{'note':'auto'})
-        self.config = Config((target,),self.root/'runtime'/'state.db',sandbox='trusted-local')
+        self.config = Config((target,),self.root/'runtime'/'state.db',sandbox='trusted-local',backend='demo')
         self.engine = Engine(self.config)
         self.config_path = self.root/'config.json'; self.config_path.write_text('{}')
         self.engine.ingest({'type':'test'}); self.engine.drain()

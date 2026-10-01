@@ -1,6 +1,8 @@
 services:
   opendots:
     build: .
+    environment:
+      OPENDOTS_DEMO: "${OPENDOTS_DEMO:-0}"
     ports:
       - "127.0.0.1:8765:8765"
     volumes:

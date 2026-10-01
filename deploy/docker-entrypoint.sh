@@ -6,6 +6,11 @@ if [ ! -f "$runtime_config" ]; then
     echo "Configured file is missing: $runtime_config" >&2
     exit 1
   fi
-  opendots init --directory /data
+  if [ "${OPENDOTS_DEMO:-0}" = 1 ]; then
+    opendots init --demo --directory /data
+  else
+    echo 'Mount your real config and set OPENDOTS_CONFIG. Optional fixtures require OPENDOTS_DEMO=1.' >&2
+    exit 1
+  fi
 fi
 exec opendots --config "$runtime_config" "$@"

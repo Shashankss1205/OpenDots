@@ -44,7 +44,7 @@ if git -C "$install_source" rev-parse --is-inside-work-tree >/dev/null 2>&1; the
   echo "Source revision: $(git -C "$install_source" rev-parse HEAD)"
 fi
 echo "Add to PATH: export PATH=\"$install_prefix/bin:\$PATH\""
-echo "Next: $install_prefix/bin/opendots init"
+echo "Next: $install_prefix/bin/opendots init --workspace /absolute/path/to/project --goal 'Your goal' --backend claude"
 echo "Then: $install_prefix/bin/opendots doctor"
 echo "Start: $install_prefix/bin/opendots serve"
 echo 'The default ref is main; use --ref with a reviewed commit for a reproducible installation.'

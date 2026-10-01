@@ -70,7 +70,7 @@ print(json.dumps({'type':'result','subtype':'success','is_error':False,'structur
         self.assertIn('Claude CLI is not installed',engine.snapshot()['work'][0]['error'])
 
     def test_init_and_doctor_use_claude_profile(self):
-        path=initialize(self.root/'config',self.source,'claude')
+        path=initialize(self.root/'config',self.source,'claude',goal='Improve this project')
         raw=json.loads(path.read_text());raw.update(sandbox='trusted-local',claude_home='profile')
         path.write_text(json.dumps(raw));config=load_config(path)
         self.assertEqual(config.backend,'claude')
@@ -91,7 +91,7 @@ print(json.dumps({'type':'result','subtype':'success','is_error':False,'structur
             else:path.write_text('private')
             with self.assertRaisesRegex(ValueError,'credential'):
                 confined_path(self.source,name+'/credentials.json' if path.is_dir() else name)
-        engine=Engine(Config((self.target,),self.root/'state.db',sandbox='trusted-local'))
+        engine=Engine(Config((self.target,),self.root/'state.db',sandbox='trusted-local',backend='demo'))
         engine.ingest({'type':'owner.request'}); engine.drain()
         work=engine.snapshot()['work'][0]
         self.assertTrue(all(not (Path(work['workspace'])/name).exists() for name in ('.claude','.claude.json','.mcp.json')))

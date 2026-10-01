@@ -24,7 +24,10 @@ def main():
     init = commands.add_parser("init", help="Create first-run configuration")
     init.add_argument("--directory", type=Path)
     init.add_argument("--workspace", type=Path)
-    init.add_argument("--backend", choices=["demo", "codex", "claude"], default="demo")
+    init.add_argument("--backend", choices=["demo", "codex", "claude"], default="claude")
+    init.add_argument("--goal", help="Your persistent natural-language objective")
+    init.add_argument("--demo", action="store_true", help="Explicitly create optional deterministic sample fixtures")
+    init.add_argument("--heartbeat", type=int, default=0, metavar="SECONDS", help="Periodic goal check-in; default off")
     commands.add_parser("doctor", help="Check configuration, dependencies and sandbox")
     run = commands.add_parser("serve", help="Run workers and the local dashboard")
     run.add_argument("--port", type=int, default=8765)
@@ -68,7 +71,7 @@ def main():
             run(getattr(args,"url","http://127.0.0.1:8765"))
             return 0
         if args.command == "init":
-            path = initialize(args.directory, args.workspace, args.backend)
+            path = initialize(args.directory, args.workspace, args.backend, args.goal, args.demo, args.heartbeat)
             print(f"Created {path}\nNext: opendots --config {path} doctor\nThen: opendots --config {path} serve")
             return 0
         args.config = args.config or default_config()
