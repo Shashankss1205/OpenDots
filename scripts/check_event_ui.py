@@ -32,6 +32,8 @@ try:
             expect(page.locator('#received-list')).to_contain_text('90%')
             expect(page.locator('#notification-list')).to_contain_text('No notification destinations configured')
             expect(page.locator('#plugin-list')).to_contain_text('builtin.notifications')
+            expect(page.locator('#plugin-list')).to_contain_text('builtin.models')
+            expect(page.locator('#provider-list')).to_contain_text('provider default')
             expect(page.locator('#plugin-list')).to_contain_text('builtin.github')
             expect(page.locator('#plugin-list')).to_contain_text('github_poll')
             assert page.locator('#sample').is_hidden(), 'Demo must be hidden in normal runtime'

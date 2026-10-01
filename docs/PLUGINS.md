@@ -1,7 +1,7 @@
 # Connect capabilities through one plugin framework
 
 A plugin is an installed Python package that supplies one or more **agent
-providers**, **event adapters**, **tools**, or **notification destinations**. One Slack package could eventually
+providers**, **configurable model kinds**, **event adapters**, **tools**, or **notification destinations**. One Slack package could eventually
 own its listener, thread-reading tool and reply tool. You enable the package once;
 each configured connection gets its own ID, cursor and health state.
 
@@ -30,6 +30,7 @@ and polling. Inspection commands and `drain` do not open source connections.
 | `builtin.codex` | `codex` agent provider |
 | `builtin.github` | `github_poll` event adapter |
 | `builtin.jsonl` | `jsonl` event adapter |
+| `builtin.models` | `openai`, `anthropic`, `openai_compatible`, `ollama`, `claude_cli`, `codex_cli` profile kinds |
 | `builtin.notifications` | `webhook` and `jsonl` notification destinations |
 | `builtin.demo` | `demo` provider, only when explicitly selected |
 
@@ -136,6 +137,7 @@ API version 2 exposes these registration surfaces:
 | `api.agents.register(name, provider)` | Provider has `plan(target, event, state)`; model relevance also requires `assess_relevance(target, event)` |
 | `api.tools.register(name, handler, arg_names)` | Handler receives `(target, args)` and returns a JSON-compatible result |
 | `api.tools.register(name, handler, schema=...)` | Typed object arguments using OpenDots' supported schema subset |
+| `api.providers.register(kind, factory, validate_config=...)` | Factory takes `(profile, context)` and returns a planning provider; see [profiles](PROVIDERS.md#add-your-own-provider-kind) |
 | `api.sources.register(kind, factory, validate_config=...)` | Factory takes one source config and returns a polling adapter |
 | `api.sources.register_listener(kind, factory, validate_config=...)` | Factory takes one source config and returns a persistent listener |
 
@@ -143,7 +145,7 @@ The optional `validate_config(config)` must raise `ValueError` for invalid sourc
 settings without opening a network connection. Plugin-level options are validated
 against the manifest's `config_schema`; it uses the same schema subset as tools
 (objects, arrays, strings, booleans, numbers, integers, null, enums, required
-properties and numeric bounds), not arbitrary JSON Schema.
+properties, `anyOf` variants and numeric bounds), not arbitrary JSON Schema.
 
 Register capabilities during `register(api)`; do not open connections or execute
 actions there. A failed registration discards that plugin's staged registry

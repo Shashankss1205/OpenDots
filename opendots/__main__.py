@@ -24,7 +24,10 @@ def main():
     init = commands.add_parser("init", help="Create first-run configuration")
     init.add_argument("--directory", type=Path)
     init.add_argument("--workspace", type=Path)
-    init.add_argument("--backend", choices=["demo", "codex", "claude"], default="claude")
+    init.add_argument("--backend", choices=["demo", "codex", "claude", "openai", "anthropic", "openai_compatible", "ollama"], default="claude")
+    init.add_argument("--model", help="Model identifier; required for API and Ollama providers")
+    init.add_argument("--base-url", help="Provider API base URL; required for openai_compatible")
+    init.add_argument("--api-key-env", help="Environment variable holding the API key, never the key itself")
     init.add_argument("--goal", help="Your persistent natural-language objective")
     init.add_argument("--demo", action="store_true", help="Explicitly create optional deterministic sample fixtures")
     init.add_argument("--heartbeat", type=int, default=0, metavar="SECONDS", help="Periodic goal check-in; default off")
@@ -39,6 +42,7 @@ def main():
     drain.add_argument("--timeout", type=int, default=300)
     commands.add_parser("status")
     commands.add_parser("listeners", help="List active input configuration and subscriptions")
+    commands.add_parser("providers", help="List model provider profiles and target assignments without calling models")
     commands.add_parser("plugins", help="List loaded plugins and capability ownership; does not start listeners")
     notifications = commands.add_parser("notifications", help="Inspect notification destinations and delivery status")
     notifications.add_argument("--retry", metavar="DELIVERY_ID", help="Retry a failed delivery to the same configured destination")
@@ -85,7 +89,8 @@ def main():
             run(getattr(args,"url","http://127.0.0.1:8765"))
             return 0
         if args.command == "init":
-            path = initialize(args.directory, args.workspace, args.backend, args.goal, args.demo, args.heartbeat)
+            path = initialize(args.directory, args.workspace, args.backend, args.goal, args.demo, args.heartbeat,
+                              model=args.model, base_url=args.base_url, api_key_env=args.api_key_env)
             print(f"Created {path}\nNext: opendots --config {path} doctor\nThen: opendots --config {path} serve")
             return 0
         args.config = args.config or default_config()
@@ -115,6 +120,8 @@ def main():
             serve(engine, args.host, args.port)
         elif args.command == "listeners":
             print(json.dumps(engine.listeners(), indent=2))
+        elif args.command == "providers":
+            print(json.dumps(engine.provider_snapshot(), indent=2))
         elif args.command == "plugins":
             print(json.dumps(engine.plugins.snapshot(), indent=2))
         elif args.command == "notifications":
