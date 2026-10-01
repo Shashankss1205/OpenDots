@@ -59,6 +59,25 @@ python3 -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
 
 Use the relaxed test command only for explicitly trusted disposable fixtures without namespaces. Wheel building needs setuptools 77+. Wheels contain the package, dashboard, first-run templates, fixture workspaces and compatibility commands. Git, Bubblewrap and the optional Codex CLI remain external executables. `opendots init --workspace PATH --goal "Your goal"` creates the external config.
 
+## PyPI releases
+
+The distribution name is `opendots`; the console command is also `opendots`.
+Before each release, keep the versions in `pyproject.toml` and
+`opendots/__init__.py` in sync, update the changelog, and run the tests above.
+Build into an empty `dist/` directory to avoid uploading old artifacts:
+
+```bash
+python3 -m pip install build twine
+python3 -m build
+python3 -m twine check dist/*
+python3 -m twine upload --username __token__ dist/*
+```
+
+Enter the PyPI token only at Twine's password prompt. Never put tokens in source
+files or commit them. PyPI release files cannot be overwritten; fixes require a
+new version. The existing GitHub release workflow prepares draft release assets
+and does not publish to PyPI.
+
 ## Deployment and extensions
 
 `docker compose up --build --wait` installs the package and runs as UID 10001, binds the host port to loopback, and initializes demo configuration in the named `opendots-data` volume. The volume persists configuration, fixture sources and runtime data across container restarts. `docker compose down --volumes` deletes it. Codex and credentials are not bundled; mount an owner-configured setup and set `OPENDOTS_CONFIG` for real targets. Nested Bubblewrap namespaces depend on the host and fail closed when unavailable. Container CI validates installation, startup, non-root execution, health and restart; it does not establish nested sandbox or live-planner acceptance. `opendots service install` creates a user systemd unit; `deploy/opendots.service.example` is an editable alternative. Use an absolute `codex_command` if the CLI is outside the service PATH.
