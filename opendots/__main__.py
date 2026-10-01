@@ -12,6 +12,8 @@ from .setup import default_config, initialize, diagnose
 
 def main():
     parser = argparse.ArgumentParser(description="OpenDots local event-driven agent prototype")
+    from . import __version__
+    parser.add_argument("--version", action="version", version="OpenDots " + __version__)
     parser.add_argument("--config", type=Path, default=None)
     commands = parser.add_subparsers(dest="command")
     tui = commands.add_parser("tui", help="Open the interactive terminal client")
