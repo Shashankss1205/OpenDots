@@ -203,3 +203,12 @@ class AuditFixTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'output exceeded'):
                 bounded_process([sys.executable,'-c','import sys; sys.stdout.write("x"*1000000)'],directory,5,output_path=output,output_limit=10000)
             self.assertLessEqual(output.stat().st_size,10000)
+
+    def test_pause_and_cancel_release_queue_safely(self):
+        from opendots.store import Store
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);store=Store(root/'state.db');target=Target('t','T','Test',root,(),{})
+            store.register_targets((target,));store.ingest({'id':'e','type':'test'},[('t',50,True,'test')])
+            store.pause('t',True);self.assertIsNone(store.claim(['t']))
+            store.pause('t',False);work=store.claim(['t']);self.assertIsNotNone(work)
+            store.cancel(work['id']);self.assertTrue(store.cancellation_requested(work['id']))

@@ -104,7 +104,13 @@ def make_server(engine, host="127.0.0.1", port=8765):
                     self.send(202, engine.ingest(normalize_github(kind, body, delivery)))
                     return
                 body = json.loads(raw_body)
-                if route == "/api/events":
+                if match := re.fullmatch(r"/api/targets/([^/]+)/pause", route):
+                    if not isinstance(body,dict) or type(body.get("paused")) is not bool:
+                        raise ValueError("paused must be a boolean")
+                    self.send(200,engine.store.pause(match[1],body["paused"]))
+                elif match := re.fullmatch(r"/api/work/([1-9][0-9]*)/cancel", route):
+                    self.send(200,engine.store.cancel(int(match[1])))
+                elif route == "/api/events":
                     self.send(202, engine.ingest(body))
                 elif route.startswith("/api/work/") and route.endswith("/decision"):
                     work_id = int(route.split("/")[3])
