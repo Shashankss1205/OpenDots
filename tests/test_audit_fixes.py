@@ -156,3 +156,19 @@ class AuditFixTests(unittest.TestCase):
                 self.assertEqual(process.returncode,0,error)
             finally:
                 if process.poll() is None: process.kill();process.communicate()
+
+    def test_slow_source_does_not_block_dispatch(self):
+        import threading, time
+        from opendots.sources import SourceRegistry
+        from opendots.store import Store
+        with tempfile.TemporaryDirectory() as directory:
+            release=threading.Event()
+            class Slow:
+                def __init__(self,config): pass
+                def poll(self,state): release.wait(2); return [],state
+            sources=SourceRegistry(({'id':'slow','kind':'slow'},),Store(Path(directory)/'state.db'))
+            sources.register('slow',Slow)
+            try:
+                start=time.monotonic();sources.poll_due(lambda event:None,asynchronous=True)
+                self.assertLess(time.monotonic()-start,.5)
+            finally: release.set();sources.close()

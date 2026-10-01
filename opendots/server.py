@@ -156,6 +156,7 @@ def serve(engine, host="127.0.0.1", port=8765):
             engine.stop_event.set()
             server.server_close()
             worker.join()
+            engine.sources.close()
             for signum, handler in previous_handlers.items():
                 signal.signal(signum, handler)
         if failures:

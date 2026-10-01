@@ -1,4 +1,5 @@
 """Real, replaceable inputs into one durable stream. No outbound writes."""
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import hmac
 import json
@@ -123,34 +124,56 @@ class SourceRegistry:
         self.factories = {"github_poll": GitHubPollSource, "jsonl": JSONLSource}
         self.configs = configs
         self.instances = {}
+        self.pool = None
+        self.pending = {}
+        self.workers = 4
 
     def register(self, kind, factory):
         if kind in self.factories:
             raise ValueError("Source kind already registered")
         self.factories[kind] = factory
 
-    def poll_due(self, ingest, now=None):
+    def poll_due(self, ingest, now=None, asynchronous=False):
         now = time.time() if now is None else now
+        if asynchronous and self.pool is None:
+            self.pool = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="opendots-source")
         for config in self.configs:
-            source_id = config["id"]
+            key = config["id"]
+            if asynchronous:
+                pending = self.pending.get(key)
+                if pending and not pending.done():
+                    continue
+                if pending:
+                    pending.result()
+                self.pending[key] = self.pool.submit(self._poll_one, config, ingest, now)
+            else:
+                self._poll_one(config, ingest, now)
+
+    def close(self):
+        if self.pool:
+            self.pool.shutdown(wait=True, cancel_futures=True)
+            self.pool = None
+
+    def _poll_one(self, config, ingest, now):
+        source_id = config["id"]
+        with self.store.connect() as db:
+            row = db.execute("SELECT state FROM source_state WHERE id=?", (source_id,)).fetchone()
+        state = json.loads(row[0]) if row else {}
+        if state.get("next_poll", 0) > now:
+            return
+        try:
+            if source_id not in self.instances:
+                self.instances[source_id] = self.factories[config["kind"]](config)
+            events, next_state = self.instances[source_id].poll(state)
+            for event in events:
+                ingest(event)
+            next_state["next_poll"] = now + max(1, int(next_state.get("poll_interval", config.get("interval_seconds", 5))))
             with self.store.connect() as db:
-                row = db.execute("SELECT state FROM source_state WHERE id=?", (source_id,)).fetchone()
-            state = json.loads(row[0]) if row else {}
-            if state.get("next_poll", 0) > now:
-                continue
-            try:
-                if source_id not in self.instances:
-                    self.instances[source_id] = self.factories[config["kind"]](config)
-                events, next_state = self.instances[source_id].poll(state)
-                for event in events:
-                    ingest(event)
-                next_state["next_poll"] = now + max(1, int(next_state.get("poll_interval", config.get("interval_seconds", 5))))
-                with self.store.connect() as db:
-                    db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state",
-                               (source_id, json.dumps(next_state)))
-                    self.store.log(db, "source_polled", {"source": source_id, "events": len(events)})
-            except Exception as exc:
-                state["next_poll"] = now + max(30, int(config.get("interval_seconds", 60)))
-                with self.store.connect() as db:
-                    db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state", (source_id, json.dumps(state)))
-                    self.store.log(db, "source_failed", {"source": source_id, "error": str(exc)[:1000]})
+                db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state",
+                           (source_id, json.dumps(next_state)))
+                self.store.log(db, "source_polled", {"source": source_id, "events": len(events)})
+        except Exception as exc:
+            state["next_poll"] = now + max(30, int(config.get("interval_seconds", 60)))
+            with self.store.connect() as db:
+                db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state", (source_id, json.dumps(state)))
+                self.store.log(db, "source_failed", {"source": source_id, "error": str(exc)[:1000]})
