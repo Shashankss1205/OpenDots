@@ -83,6 +83,10 @@ class Engine:
             raise ValueError("Invalid event ID")
         if not isinstance(event["source"], str) or len(event["type"]) > 256:
             raise ValueError("Invalid source/type")
+        if "dedup_key" in raw:
+            if not isinstance(raw["dedup_key"],str) or not 0<len(raw["dedup_key"])<=256:
+                raise ValueError("Invalid event deduplication key")
+            event["dedup_key"]=raw["dedup_key"]
         if "target_id" in raw:
             if raw["target_id"] not in self.targets:
                 raise ValueError("Unknown target ID")

@@ -38,7 +38,7 @@ def normalize_github(kind, payload, delivery_id, repo=None):
     labels = entity.get("labels", [])
     label_names = [label.get("name", "") if isinstance(label, dict) else str(label) for label in labels]
     severity = "critical" if any("critical" in name.lower() for name in label_names) else "normal"
-    return {"id": "github:" + str(delivery_id), "type": event_type, "source": "github",
+    event = {"id": "github:" + str(delivery_id), "type": event_type, "source": "github",
             "payload": {"repo": repository, "title": entity.get("title", event_type), "body": content.get("body", ""),
                         "action": action, "actor": payload.get("sender", {}).get("login"),
                         "comment_id": content.get("id") if comment else None,
@@ -47,6 +47,15 @@ def normalize_github(kind, payload, delivery_id, repo=None):
                         "after": payload.get("after"), "commits": payload.get("commits", []),
                         "number": entity.get("number"), "url": content.get("html_url") or entity.get("html_url"), "severity": severity,
                         "labels": label_names}}
+    stamp=content.get("updated_at") or content.get("created_at")
+    identity=content.get("id")
+    if kind == "push":
+        identity=payload.get("ref");stamp=payload.get("after")
+    if repository and identity is not None and stamp:
+        semantic=[repository,event_type,str(identity),stamp]
+        event["dedup_key"]="github:"+hashlib.sha256(json.dumps(semantic,sort_keys=True).encode()).hexdigest()
+    return event
+
 
 
 class GitHubPollSource:
@@ -78,7 +87,26 @@ class GitHubPollSource:
             raise RuntimeError(f"GitHub polling HTTP {exc.code}; check rate limits and configured credentials") from None
         if not isinstance(items, list):
             raise ValueError("GitHub returned an invalid event list")
-        events = [normalize_github(item["type"], item["payload"], item["id"], self.repo) for item in reversed(items)]
+        previous=set(state.get("seen_ids", []))
+        page=1
+        max_pages=max(1,int(self.config.get("max_pages",5)))
+        while previous and items and not previous.intersection(str(item["id"]) for item in items) and len(items)%100==0 and page<max_pages:
+            page+=1
+            paged_headers={key:value for key,value in headers.items() if key != "If-None-Match"}
+            paged=Request(f"https://api.github.com/repos/{self.repo}/events?per_page=100&page={page}",headers=paged_headers)
+            with urlopen(paged,timeout=10) as response:
+                body=response.read(2_000_001)
+                if len(body)>2_000_000:raise ValueError("GitHub page too large")
+                batch=json.loads(body)
+            if not isinstance(batch,list):raise ValueError("Invalid GitHub page")
+            items.extend(batch)
+            if len(batch)<100:break
+        ids=[str(item["id"]) for item in items]
+        if previous and items and not previous.intersection(ids):
+            state["gap_detected_at"]=time.time()
+            state["gap_message"]="Previous cursor not found in available event history; reconcile repository state"
+        state["seen_ids"]=ids[:max_pages*100]
+        events = [normalize_github(item["type"], item["payload"], item["id"], self.repo) for item in reversed(items) if str(item["id"]) not in previous]
         if not state.get("initialized") and self.config.get("bootstrap", "observe") == "observe":
             # Avoid creating work for old history on first connection.
             events = []
@@ -186,6 +214,10 @@ class SourceRegistry:
                 self.instances[source_id] = self.factories[config["kind"]](config)
             events, next_state = self.instances[source_id].poll(state)
             for event in events:
+                if config["kind"] == "github_poll":
+                    with self.store.connect() as db:
+                        if db.execute("SELECT 1 FROM events WHERE id=?",(event["id"],)).fetchone():
+                            continue
                 try:
                     ingest(event)
                 except (ValueError, TypeError) as exc:
@@ -201,6 +233,8 @@ class SourceRegistry:
                            (source_id, json.dumps(next_state)))
                 for record in next_state.pop("rejected", []):
                     self.store.log(db, "source_record_rejected", {"source":source_id, **record})
+                if next_state.get("gap_detected_at") != state.get("gap_detected_at"):
+                    self.store.log(db,"source_gap_detected",{"source":source_id,"message":next_state.get("gap_message")})
                 self.store.log(db, "source_polled", {"source": source_id, "events": len(events)})
         except Exception as exc:
             state.update(last_error=str(exc)[:1000],last_failure=now,consecutive_failures=state.get("consecutive_failures",0)+1)

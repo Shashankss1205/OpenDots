@@ -350,3 +350,14 @@ class AuditFixTests(unittest.TestCase):
             self.assertFalse({w['id'] for w in first['work']} & {w['id'] for w in second['work']})
             self.assertEqual(len(store.history(query='event-3')['work']),1)
             self.assertEqual(store.detail(1)['work']['event_id'],'event-0')
+
+    def test_poll_and_webhook_share_semantic_identity(self):
+        from opendots.sources import normalize_github
+        from opendots.store import Store
+        payload={'action':'created','issue':{'id':1,'number':1},'comment':{'id':2,'body':'hello','created_at':'2026-10-01T00:00:00Z'}}
+        first=normalize_github('IssueCommentEvent',payload,'poll','owner/repo')
+        second=normalize_github('issue_comment',payload,'webhook','owner/repo')
+        self.assertEqual(first['dedup_key'],second['dedup_key'])
+        with tempfile.TemporaryDirectory() as directory:
+            store=Store(Path(directory)/'state.db');store.ingest(first,[])
+            self.assertTrue(store.ingest(second,[])['duplicate'])
