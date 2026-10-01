@@ -186,3 +186,11 @@ class AuditFixTests(unittest.TestCase):
             os.replace(replacement,path)
             events,state=source.poll(state)
             self.assertEqual(events[0]['type'],'replacement')
+
+    def test_invalid_configuration_has_field_specific_errors(self):
+        from opendots.config import validate_config
+        for key,value in [('workers',False),('max_planning_rounds',0),('max_repair_attempts',-1),('source_workers',0)]:
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError,key):
+                validate_config({'targets':[],key:value})
+        with self.assertRaisesRegex(ValueError,'checks.bad'):
+            validate_config({'targets':[{'id':'t','name':'T','objective':'O','workspace':'.','checks':{'bad':'shell string'}}]})
