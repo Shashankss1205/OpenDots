@@ -304,3 +304,11 @@ class AuditFixTests(unittest.TestCase):
             entries,truncated=workspace_snapshot(root,{'max_files':3,'max_bytes':400})
             self.assertTrue(truncated);self.assertLessEqual(len(entries),3)
             self.assertLessEqual(len(json.dumps(entries).encode()),400)
+
+    def test_planner_environment_excludes_runtime_secrets(self):
+        from unittest.mock import patch
+        from opendots.agents import CodexAgent
+        with patch.dict('os.environ',{'GITHUB_TOKEN':'fixture','OPENAI_API_KEY':'fixture','PATH':'/usr/bin'}):
+            env=CodexAgent(planner_env=('OPENAI_API_KEY',),planner_home='/tmp/profile').environment()
+            self.assertNotIn('GITHUB_TOKEN',env);self.assertEqual(env['OPENAI_API_KEY'],'fixture')
+            self.assertEqual(env['CODEX_HOME'],'/tmp/profile')

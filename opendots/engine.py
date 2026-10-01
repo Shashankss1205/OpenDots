@@ -57,7 +57,7 @@ class Engine:
         self.agents = agents or AgentRegistry()
         if not agents:
             self.agents.register("demo", DemoAgent())
-            self.agents.register("codex", CodexAgent(config.codex_command, config.model, config.agent_timeout, self.registry, config.context_limits))
+            self.agents.register("codex", CodexAgent(config.codex_command, config.model, config.agent_timeout, self.registry, config.context_limits, config.planner_env, config.planner_home))
         self.agent = agent
         database_key = hashlib.sha256(config.database.name.encode()).hexdigest()[:16]
         self.workspaces = Workspaces(config.database.parent / "workspaces" / database_key, self.store)

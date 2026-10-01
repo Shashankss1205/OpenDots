@@ -54,7 +54,9 @@ def diagnose(config_path):
         add('codex', bool(command), command or 'Install Codex CLI')
         if command:
             try:
-                result = subprocess.run([command,'login','status'], capture_output=True, timeout=10)
+                from .agents import CodexAgent
+                environment=CodexAgent(planner_env=config.planner_env, planner_home=config.planner_home).environment()
+                result = subprocess.run([command,'login','status'], capture_output=True, timeout=10, env=environment)
                 add('codex_authentication', result.returncode == 0, 'Authenticated' if result.returncode == 0 else 'Run codex login')
             except (OSError, subprocess.TimeoutExpired):
                 add('codex_authentication', False, 'Authentication probe failed or timed out')

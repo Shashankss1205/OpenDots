@@ -43,6 +43,8 @@ class Config:
     max_events_per_minute: int = 1000
     priority_aging_seconds: int = 60
     context_limits: dict = field(default_factory=dict)
+    planner_env: tuple[str, ...] = ()
+    planner_home: str | None = None
 
 
 def validate_config(raw):
@@ -55,6 +57,10 @@ def validate_config(raw):
             raise ValueError(f"config.{key} must be an integer >= {minimum}")
     if not isinstance(raw.get("plugins",[]),list) or any(not isinstance(v,str) or not v for v in raw.get("plugins",[])):
         raise ValueError("config.plugins must be an array of installed extension names")
+    if not isinstance(raw.get("planner_env",[]),list) or any(not isinstance(v,str) for v in raw.get("planner_env",[])):
+        raise ValueError("planner_env must name explicitly allowed environment variables")
+    if raw.get("planner_home") is not None and not isinstance(raw["planner_home"],str):
+        raise ValueError("planner_home must be a path string")
     limits=raw.get("context_limits",{})
     if not isinstance(limits,dict):
         raise ValueError("context_limits must be an object")
@@ -190,4 +196,5 @@ def load_config(path: Path) -> Config:
                   workers, backend, agent_timeout,
                   raw.get("codex_command", "codex"), raw.get("model"), tuple(schedules),
                   tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)), int(raw.get("max_repair_attempts", 2)), int(raw.get("source_workers", 4)), tuple(raw.get("plugins", [])), int(raw.get("max_queued_per_target",1000)),
-                  int(raw.get("max_events_per_minute",1000)), int(raw.get("priority_aging_seconds",60)), raw.get("context_limits",{}))
+                  int(raw.get("max_events_per_minute",1000)), int(raw.get("priority_aging_seconds",60)), raw.get("context_limits",{}), tuple(raw.get("planner_env",[])),
+                  str((base/raw["planner_home"]).resolve()) if raw.get("planner_home") else None)
