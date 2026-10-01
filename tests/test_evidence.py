@@ -47,6 +47,9 @@ class EvidenceTests(unittest.TestCase):
         (Path(work["workspace"]) / "value.txt").write_text("broken")
         engine.store.decide(work["id"], True, work["approval_token"])
         resumed = Engine(self.config)
+        fresh = resumed.drain()["work"][0]
+        self.assertEqual(fresh["status"], "waiting_approval")
+        resumed.store.decide(fresh["id"], True, fresh["approval_token"])
         final = resumed.drain()
         self.assertEqual(final["counts"], {"failed": 1})
         self.assertEqual(resumed.store.state("input")["notes"], [])
@@ -57,6 +60,9 @@ class EvidenceTests(unittest.TestCase):
         engine.store.decide(work["id"], True, work["approval_token"])
         target = replace(self.target, checks={"input": ["{python}", "-c", "raise SystemExit(9)"]})
         resumed = Engine(replace(self.config, targets=(target,)))
+        fresh = resumed.drain()["work"][0]
+        self.assertEqual(fresh["status"], "waiting_approval")
+        resumed.store.decide(fresh["id"], True, fresh["approval_token"])
         self.assertEqual(resumed.drain()["counts"], {"failed": 1})
         self.assertEqual(resumed.store.state("input")["notes"], [])
 
