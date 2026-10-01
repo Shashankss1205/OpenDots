@@ -277,3 +277,13 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(registry.execute(target,action),action['args'])
         action['args']['values']=[True]
         with self.assertRaisesRegex(ValueError,'integer'):registry.execute(target,action)
+
+    def test_queue_capacity_rejects_without_acknowledging_event(self):
+        from opendots.store import Store,CapacityError
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);store=Store(root/'state.db');store.queue_limit=1
+            store.register_targets((Target('t','T','Test',root,(),{}),))
+            matches=[('t',50,True,'test')]
+            store.ingest({'id':'one','type':'test'},matches)
+            with self.assertRaises(CapacityError):store.ingest({'id':'two','type':'test'},matches)
+            self.assertEqual(store.snapshot()['event_count'],1)

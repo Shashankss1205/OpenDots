@@ -38,13 +38,17 @@ class Config:
     max_repair_attempts: int = 2
     source_workers: int = 4
     plugins: tuple[str, ...] = ()
+    max_queued_per_target: int = 1000
+    max_events_per_minute: int = 1000
+    priority_aging_seconds: int = 60
 
 
 def validate_config(raw):
     if not isinstance(raw, dict) or not isinstance(raw.get("targets"), list):
         raise ValueError("config.targets must be an array")
     for key, minimum in (("workers",1),("source_workers",1),("agent_timeout",1),
-                         ("max_planning_rounds",1),("max_repair_attempts",0)):
+                         ("max_planning_rounds",1),("max_repair_attempts",0),("max_queued_per_target",1),
+                         ("max_events_per_minute",1),("priority_aging_seconds",1)):
         if key in raw and (type(raw[key]) is not int or raw[key] < minimum):
             raise ValueError(f"config.{key} must be an integer >= {minimum}")
     if not isinstance(raw.get("plugins",[]),list) or any(not isinstance(v,str) or not v for v in raw.get("plugins",[])):
@@ -174,4 +178,5 @@ def load_config(path: Path) -> Config:
     return Config(tuple(targets), database,
                   workers, backend, agent_timeout,
                   raw.get("codex_command", "codex"), raw.get("model"), tuple(schedules),
-                  tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)), int(raw.get("max_repair_attempts", 2)), int(raw.get("source_workers", 4)), tuple(raw.get("plugins", [])))
+                  tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)), int(raw.get("max_repair_attempts", 2)), int(raw.get("source_workers", 4)), tuple(raw.get("plugins", [])), int(raw.get("max_queued_per_target",1000)),
+                  int(raw.get("max_events_per_minute",1000)), int(raw.get("priority_aging_seconds",60)))
