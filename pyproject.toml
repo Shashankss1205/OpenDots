@@ -17,4 +17,4 @@ spots = "opendots.__main__:main"
 include = ["opendots*", "spots*"]
 
 [tool.setuptools.package-data]
-opendots = ["web/*"]
+opendots = ["web/*", "templates/*.json", "templates/workspaces/*/*", "templates/workspaces/*/src/*"]

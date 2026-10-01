@@ -100,3 +100,13 @@ class AuditFixTests(unittest.TestCase):
             store.register_targets((replace(target,desired_state={'goal':'new'}),))
             self.assertEqual(store.state('t')['desired_state'],{'goal':'new'})
             self.assertNotEqual(store.state('t')['config_revision'],old)
+
+    def test_init_creates_external_config_without_overwrite(self):
+        from opendots.setup import initialize
+        from opendots.config import load_config
+        with tempfile.TemporaryDirectory() as directory:
+            path=initialize(Path(directory)/'config')
+            config=load_config(path)
+            self.assertEqual(len(config.targets),2)
+            self.assertTrue(all(t.workspace.is_dir() for t in config.targets))
+            with self.assertRaises(ValueError): initialize(path.parent)
