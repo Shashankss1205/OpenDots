@@ -49,7 +49,7 @@ same environment as OpenDots. For a package you have developed locally:
 "$HOME/.local/share/opendots/runtime/bin/python" -m pip install /absolute/path/to/your-plugin
 
 # Or, for an existing pipx installation:
-pipx inject opendots-local-prototype /absolute/path/to/your-plugin
+pipx inject opendots /absolute/path/to/your-plugin
 ```
 
 Choose the command matching your installation. Custom prefixes require their own

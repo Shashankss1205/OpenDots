@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opendots-local-prototype"
+name = "opendots"
 version = "0.2.0"
 description = "Event-driven agents with persistent targets and reviewable local actions"
 readme = "README.md"
