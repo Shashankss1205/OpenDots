@@ -112,6 +112,9 @@ class Engine:
         try:
             target = self.workspaces.prepare(target, work)
             while True:
+                if self.store.cancellation_requested(work["id"]):
+                    self.store.finish(work, "cancelled", "Owner cancelled work at an action boundary")
+                    return
                 if self.stop_event.is_set():
                     self.store.finish(work, "interrupted", "Service stopped between bounded actions; inspect before retry")
                     return
@@ -146,6 +149,9 @@ class Engine:
                     return
                 retry_check = False
                 for index in range(work["next_action"], len(plan["actions"])):
+                    if self.store.cancellation_requested(work["id"]):
+                        self.store.finish(work, "cancelled", "Owner cancelled work at an action boundary")
+                        return
                     if self.stop_event.is_set():
                         self.store.finish(work, "interrupted", "Service stopped between bounded actions; inspect before retry")
                         return

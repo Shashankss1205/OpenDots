@@ -28,6 +28,12 @@ def main():
     drain = commands.add_parser("drain", help="Process the queue until idle or awaiting approval")
     drain.add_argument("--timeout", type=int, default=300)
     commands.add_parser("status")
+    pause = commands.add_parser("pause")
+    pause.add_argument("target_id")
+    resume = commands.add_parser("resume")
+    resume.add_argument("target_id")
+    cancel = commands.add_parser("cancel")
+    cancel.add_argument("work_id", type=int)
     decide = commands.add_parser("decide")
     decide.add_argument("work_id", type=int)
     decide.add_argument("decision", choices=["approve", "reject"])
@@ -56,6 +62,10 @@ def main():
         elif args.command == "drain":
             result = engine.drain(args.timeout)
             print(json.dumps({"counts": result["counts"], "work": result["work"]}, indent=2))
+        elif args.command in {"pause", "resume"}:
+            print(json.dumps(engine.store.pause(args.target_id, args.command == "pause")))
+        elif args.command == "cancel":
+            print(json.dumps(engine.store.cancel(args.work_id)))
         elif args.command == "decide":
             print(json.dumps(engine.store.decide(args.work_id, args.decision == "approve")))
         else:

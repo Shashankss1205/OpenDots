@@ -46,6 +46,9 @@ class Store:
             if "repair_attempts" not in columns:
                 db.execute("ALTER TABLE work ADD COLUMN repair_attempts INTEGER NOT NULL DEFAULT 0")
 
+            if "cancel_requested" not in columns:
+                db.execute("ALTER TABLE work ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0")
+
     @contextmanager
     def connect(self):
         db = sqlite3.connect(self.path, timeout=15)
@@ -118,7 +121,8 @@ class Store:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(f"""SELECT w.* FROM work w WHERE w.target_id IN ({placeholders}) AND
-             (w.status='ready' OR (w.status='queued' AND NOT EXISTS
+             w.target_id IN (SELECT id FROM targets WHERE COALESCE(json_extract(state,'$.paused'),0)=0) AND
+             (w.status='ready' OR (w.status='queued'  AND NOT EXISTS
               (SELECT 1 FROM work active WHERE active.target_id=w.target_id
                AND active.status IN ('running','waiting_approval','ready'))))
              ORDER BY CASE WHEN w.status='ready' THEN 0 ELSE 1 END, w.priority DESC,w.id LIMIT 1""",
@@ -219,6 +223,35 @@ class Store:
                     state["actual_state"]["latest_proposal_commit"] = artifact["commit"]
                 db.execute("UPDATE targets SET state=? WHERE id=?", (json.dumps(state), work["target_id"]))
             self.log(db, "work_" + status, {"error": error, "summary": work.get("summary"), "artifact": artifact}, work["target_id"], work["id"])
+
+    def pause(self, target_id, paused):
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT state FROM targets WHERE id=?", (target_id,)).fetchone()
+            if row is None:
+                raise ValueError("Unknown target")
+            state = json.loads(row[0]); state["paused"] = bool(paused)
+            db.execute("UPDATE targets SET state=? WHERE id=?", (json.dumps(state), target_id))
+            self.log(db, "target_paused" if paused else "target_resumed", {}, target_id)
+        return {"target_id":target_id,"paused":bool(paused)}
+
+    def cancel(self, work_id):
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT status FROM work WHERE id=?", (work_id,)).fetchone()
+            if row is None or row[0] not in {"queued","running","ready","waiting_approval"}:
+                raise ValueError("Only active work can be cancelled")
+            if row[0] == "running":
+                db.execute("UPDATE work SET cancel_requested=1 WHERE id=?", (work_id,))
+            else:
+                db.execute("UPDATE work SET status='cancelled',updated=? WHERE id=?", (time.time(),work_id))
+            self.log(db,"work_cancel_requested",{},work_id=work_id)
+        return {"work_id":work_id,"cancel_requested":True}
+
+    def cancellation_requested(self, work_id):
+        with self.connect() as db:
+            row = db.execute("SELECT cancel_requested FROM work WHERE id=?", (work_id,)).fetchone()
+            return bool(row and row[0])
 
     def recover_interrupted(self):
         # Called only while holding the process lock. Never replay ambiguous side effects.
