@@ -152,7 +152,7 @@ class ToolRegistry:
         if tool in {"write_file", "replace_text"}:
             protected = (*target.protected_paths, *target.skills)
             if any(fnmatch.fnmatchcase(args["path"], pattern) for pattern in protected):
-                raise ValueError("Write path is protected owner validation or instruction input")
+                raise ValueError("Write path is outside allowed scope: protected owner validation or instruction input")
             current = target.workspace
             for part in Path(args["path"]).parts:
                 current = current / part
