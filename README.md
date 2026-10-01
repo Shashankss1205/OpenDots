@@ -11,11 +11,25 @@ OpenDots is an independent local prototype. Targets subscribe to events; workers
 Requires Python 3.11+, Git, and Linux with working bubblewrap namespaces for isolated checks.
 
 ```bash
-sudo apt-get install git bubblewrap
-python3 -m opendots serve
+git clone https://github.com/Shashankss1205/OpenDots.git
+cd OpenDots
+bash install.sh --source "$PWD"
+export PATH="$HOME/.local/share/opendots/runtime/bin:$PATH"
+cd ..
+opendots init
+opendots doctor
+opendots serve
 ```
 
-Open **http://127.0.0.1:8765**, click **Run five-event demo**, and review the proposed actions. Run from the repository root. The default planner is deterministic and clearly labeled; the runtime, checks, persistence, approvals, and Git worktrees are real.
+The installer uses an isolated Python environment and does not require sudo. Install
+system prerequisites first (`sudo apt-get install git bubblewrap python3-venv` on
+Ubuntu/Debian with Python 3.11+). Use `--ref COMMIT` when installing remotely to pin
+a reviewed revision; `--prefix DIR` changes the installation directory. Run
+`bash install.sh --help` for options. It never overwrites an existing installation.
+For an existing repository, use `opendots init --workspace /path/to/repo --backend codex`,
+then configure subscriptions, write scopes and required checks in the printed config.
+
+Open **http://127.0.0.1:8765**, click **Run five-event demo**, and review the proposed actions. The default planner is deterministic and clearly labeled; the runtime, checks, persistence, approvals, and Git worktrees are real.
 
 For disposable fixtures on a host without working namespaces, explicitly set `"sandbox": "trusted-local"` in [the configuration](examples/config.json). This executes checks without process or network isolation. There is no silent fallback.
 
