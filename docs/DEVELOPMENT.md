@@ -107,3 +107,11 @@ configurable. Capacity failures do not acknowledge events; HTTP returns 429 and
 source cursors retry. `priority_aging_seconds` (default 60) raises waiting work
 priority over time to avoid starvation. Pause/resume and cancel are available in
 the CLI/API; cancellation of running work occurs between bounded actions.
+
+## Write scope defaults
+
+Omitted `write_paths` in file configuration now permits no writes. Broad access
+requires an explicit `"*"`. `protected_paths` defaults to check.py, tests/** and
+.github/** and takes precedence over write scopes; configured skills are also
+protected. Owners can customize protected paths, and should include every local
+validation harness they rely on as independent evidence.

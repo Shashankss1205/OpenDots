@@ -287,3 +287,10 @@ class AuditFixTests(unittest.TestCase):
             store.ingest({'id':'one','type':'test'},matches)
             with self.assertRaises(CapacityError):store.ingest({'id':'two','type':'test'},matches)
             self.assertEqual(store.snapshot()['event_count'],1)
+
+    def test_owner_check_is_protected_even_with_broad_write_scope(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'check.py').write_text('assert False')
+            target=Target('t','T','Test',root,(),{},write_paths=('*',))
+            with self.assertRaisesRegex(ValueError,'protected'):
+                ToolRegistry().execute(target,{'tool':'write_file','args':{'path':'check.py','content':'pass','expected_sha256':digest('assert False')}})

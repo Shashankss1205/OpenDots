@@ -223,7 +223,8 @@ class Engine:
                            "fingerprint": workspace_fingerprint(target.workspace),
                            "checks": target.checks, "sandbox": self.registry.sandbox,
                            "policy": target.policy, "write_paths": target.write_paths,
-                           "required_checks": target.required_checks, "success_conditions": target.success_conditions}, sort_keys=True)
+                           "required_checks": target.required_checks, "success_conditions": target.success_conditions,
+                           "protected_paths": target.protected_paths}, sort_keys=True)
 
     def _passed_checks(self, work, target):
         from .evidence import check_signature, workspace_fingerprint

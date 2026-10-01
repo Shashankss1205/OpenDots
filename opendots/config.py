@@ -20,6 +20,7 @@ class Target:
     write_paths: tuple[str, ...] = ("*",)
     required_checks: tuple[str, ...] = ()
     success_conditions: tuple[dict, ...] = ()
+    protected_paths: tuple[str, ...] = ("check.py", "tests/**", ".github/**")
 
 
 @dataclass(frozen=True)
@@ -63,7 +64,7 @@ def validate_config(raw):
         for key in ("policy","checks","recipes","desired_state"):
             if not isinstance(target.get(key, {}), dict):
                 raise ValueError(f"{prefix}.{key} must be an object")
-        for key in ("write_paths","skills","required_checks"):
+        for key in ("write_paths","skills","required_checks","protected_paths"):
             values = target.get(key, [])
             if not isinstance(values, list) or any(not isinstance(v,str) or not v for v in values):
                 raise ValueError(f"{prefix}.{key} must be an array of nonempty strings")
@@ -140,7 +141,8 @@ def load_config(path: Path) -> Config:
                               tuple(subscriptions), policy, item.get("recipes", {}),
                               item.get("checks", {}), int(item.get("minimum_priority", 20)),
                               item.get("desired_state", {}), tuple(item.get("skills", [])), item.get("agent"),
-                              tuple(item.get("write_paths", ["*"])), tuple(required_checks), tuple(item.get("success_conditions", []))))
+                              tuple(item.get("write_paths", [])), tuple(required_checks), tuple(item.get("success_conditions", [])),
+                              tuple(item.get("protected_paths", ["check.py", "tests/**", ".github/**"]))))
     workers = int(raw.get("workers", 4))
     if workers < 1:
         raise ValueError("workers must be positive")

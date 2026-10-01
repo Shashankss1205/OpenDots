@@ -150,6 +150,9 @@ class ToolRegistry:
         if tool in {"read_file", "write_file", "replace_text"}:
             confined_path(target.workspace, args["path"])
         if tool in {"write_file", "replace_text"}:
+            protected = (*target.protected_paths, *target.skills)
+            if any(fnmatch.fnmatchcase(args["path"], pattern) for pattern in protected):
+                raise ValueError("Write path is protected owner validation or instruction input")
             current = target.workspace
             for part in Path(args["path"]).parts:
                 current = current / part
