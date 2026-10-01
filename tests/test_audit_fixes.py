@@ -268,3 +268,12 @@ class AuditFixTests(unittest.TestCase):
             api=ExtensionAPI(None,None,None);load_extensions([],api);self.assertEqual(calls,[])
             load_extensions(['fixture'],api);self.assertEqual(calls,[1])
             with self.assertRaises(ValueError):load_extensions(['missing'],api)
+
+    def test_custom_tools_accept_typed_nested_arguments(self):
+        registry=ToolRegistry();registry.register('typed',lambda target,args:args,schema={'type':'object','properties':{
+            'enabled':{'type':'boolean'},'values':{'type':'array','items':{'type':'integer'}}},'required':['enabled','values'],'additionalProperties':False})
+        target=Target('t','T','Test',Path('.'),(),{})
+        action={'tool':'typed','args':{'enabled':True,'values':[1,2]}}
+        self.assertEqual(registry.execute(target,action),action['args'])
+        action['args']['values']=[True]
+        with self.assertRaisesRegex(ValueError,'integer'):registry.execute(target,action)

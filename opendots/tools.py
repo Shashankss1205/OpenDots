@@ -109,21 +109,28 @@ class ToolRegistry:
     """Add new handlers without changing the scheduler or target count."""
     def __init__(self, sandbox="bubblewrap"):
         self.sandbox = sandbox
+        self.schemas = {}
         self.handlers = {"read_file": self.read_file, "write_file": self.write_file, "replace_text": self.replace_text,
                          "run_check": self.run_check, "note": self.note}
         self.arg_names = {"read_file": ["path"], "write_file": ["path", "content", "expected_sha256"],
                           "replace_text": ["path", "old_text", "new_text", "expected_sha256"],
                           "run_check": ["name"], "note": ["text"]}
 
-    def register(self, name, handler, arg_names):
+    def register(self, name, handler, arg_names=None, schema=None):
         if name in self.handlers:
             raise ValueError("Tool already registered")
         if not isinstance(name, str) or not name or not callable(handler):
             raise ValueError("A tool needs a nonempty name and a callable handler")
+        if schema is not None:
+            if schema.get("type") != "object":
+                raise ValueError("Custom tool schema must describe an object")
+            arg_names = list(schema.get("properties", {}))
         if not isinstance(arg_names, list) or any(not isinstance(s, str) for s in arg_names):
             raise ValueError("Tool arg_names must be an array of strings")
         self.handlers[name] = handler
         self.arg_names[name] = arg_names
+        if schema is not None:
+            self.schemas[name] = schema
 
     def validate(self, target, action):
         if not isinstance(action, dict) or set(action) != {"tool", "args"}:
@@ -132,6 +139,10 @@ class ToolRegistry:
             raise ValueError("Unknown tool or invalid tool arguments")
         args = action["args"]
         tool = action["tool"]
+        if tool in self.schemas:
+            from .schema import validate
+            validate(args, self.schemas[tool])
+            return
         if set(args) != set(self.arg_names[tool]):
             raise ValueError(f"Invalid arguments for {tool}")
         if any(not isinstance(v, str) for v in args.values()):

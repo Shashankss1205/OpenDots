@@ -94,3 +94,8 @@ its entry-point name in `plugins`. Packages declare an `opendots.plugins` entry
 point pointing to `register(api)`. API version 1 exposes `api.agents`, `api.tools`
 and `api.sources`; use their registration methods. Only explicitly listed plugins
 are loaded. Plugins run as trusted application code; they are not sandboxed.
+
+Custom tools can pass `schema={"type":"object", ...}` to `register` instead of
+string-only `arg_names`. Supported schema types are object, array, string, boolean,
+integer, number and null, with required fields, enums, numeric bounds and strict
+extra-field rejection. Existing string argument registrations remain compatible.
