@@ -83,7 +83,7 @@ source repository from its remote yourself before syncing.
 
 ## Use a real agent
 
-Install and authenticate the Codex CLI, then set `"backend": "codex"` in your configuration. OpenDots asks Codex for structured plans and executes permitted actions through its own tool registry. You can configure workers, models, subscriptions, write scopes, required checks, schedules, and providers.
+Install and authenticate Claude Code or Codex CLI, then set `"backend": "claude"` or `"backend": "codex"` in your configuration. OpenDots requests structured plans and executes permitted actions through its own tool registry. See [provider setup](docs/PROVIDERS.md) for authentication, profiles and validation boundaries. You can configure workers, models, subscriptions, write scopes, required checks, schedules, and providers.
 
 ```bash
 python3 -m opendots --config examples/config.json serve

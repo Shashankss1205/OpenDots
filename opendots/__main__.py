@@ -24,7 +24,7 @@ def main():
     init = commands.add_parser("init", help="Create first-run configuration")
     init.add_argument("--directory", type=Path)
     init.add_argument("--workspace", type=Path)
-    init.add_argument("--backend", choices=["demo", "codex"], default="demo")
+    init.add_argument("--backend", choices=["demo", "codex", "claude"], default="demo")
     commands.add_parser("doctor", help="Check configuration, dependencies and sandbox")
     run = commands.add_parser("serve", help="Run workers and the local dashboard")
     run.add_argument("--port", type=int, default=8765)

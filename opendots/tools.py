@@ -26,13 +26,13 @@ def confined_path(root: Path, relative: str) -> Path:
         raise ValueError("Tool paths must be relative to the target workspace")
     parts = Path(relative).parts
     # Resolve reads safely, but never mutate through an alias of an allowed path.
-    if any(p in {"..", ".git", ".aws", ".ssh", ".codex"} or p.startswith(".env") for p in parts):
+    if any(p in {"..", ".git", ".aws", ".ssh", ".codex", ".claude", ".claude.json", ".mcp.json"} or p.startswith(".env") for p in parts):
         raise ValueError("Traversal and credential paths are not allowed")
     candidate = (root / relative).resolve()
     if not candidate.is_relative_to(root.resolve()) or candidate == root.resolve():
         raise ValueError("Path escapes the target workspace")
     resolved_parts = candidate.relative_to(root.resolve()).parts
-    if any(p in {".git", ".aws", ".ssh", ".codex"} or p.startswith(".env") for p in resolved_parts):
+    if any(p in {".git", ".aws", ".ssh", ".codex", ".claude", ".claude.json", ".mcp.json"} or p.startswith(".env") for p in resolved_parts):
         raise ValueError("Resolved credential paths are not allowed")
     return candidate
 

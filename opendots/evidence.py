@@ -10,7 +10,7 @@ def workspace_fingerprint(workspace):
     # Include Git-ignored validation inputs too. A dependency archive or harness
     # may be ignored by Git while still determining the check's actual result.
     paths = []
-    excluded = {".git", ".aws", ".ssh", ".codex", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+    excluded = {".git", ".aws", ".ssh", ".codex", ".claude", ".claude.json", ".mcp.json", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
     for directory, subdirs, files in os.walk(root, followlinks=False):
         subdirs[:] = [name for name in subdirs if name not in excluded and not name.startswith(".env")]
         for name in files:
