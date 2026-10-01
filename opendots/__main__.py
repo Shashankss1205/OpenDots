@@ -16,6 +16,9 @@ def main():
     commands = parser.add_subparsers(dest="command")
     tui = commands.add_parser("tui", help="Open the interactive terminal client")
     tui.add_argument("--url", default="http://127.0.0.1:8765")
+    service = commands.add_parser("service", help="Manage a user background service")
+    service.add_argument("action", choices=["install","start","stop","status"])
+    service.add_argument("--name", default="opendots")
     init = commands.add_parser("init", help="Create first-run configuration")
     init.add_argument("--directory", type=Path)
     init.add_argument("--workspace", type=Path)
@@ -50,6 +53,12 @@ def main():
             print(f"Created {path}\nNext: opendots --config {path} doctor\nThen: opendots --config {path} serve")
             return 0
         args.config = args.config or default_config()
+        if args.command == "service":
+            from .service import manage
+            if args.action == "install":
+                load_config(args.config)
+            print(json.dumps(manage(args.action,args.config,args.name),indent=2))
+            return 0
         if args.command == "doctor":
             result = diagnose(args.config)
             print(json.dumps(result, indent=2))

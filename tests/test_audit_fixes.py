@@ -312,3 +312,10 @@ class AuditFixTests(unittest.TestCase):
             env=CodexAgent(planner_env=('OPENAI_API_KEY',),planner_home='/tmp/profile').environment()
             self.assertNotIn('GITHUB_TOKEN',env);self.assertEqual(env['OPENAI_API_KEY'],'fixture')
             self.assertEqual(env['CODEX_HOME'],'/tmp/profile')
+
+    def test_service_unit_quotes_paths_and_preserves_config(self):
+        from opendots.service import unit_text
+        text=unit_text('/tmp/a space/100%/config.json','/tmp/python path/python')
+        self.assertIn('100%%',text);self.assertIn("'/tmp/python path/python'",text)
+        self.assertIn('UMask=0077',text)
+        with self.assertRaises(ValueError):unit_text('/tmp/bad\nconfig')
