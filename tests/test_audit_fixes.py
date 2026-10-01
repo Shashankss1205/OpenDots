@@ -340,3 +340,13 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(health['consecutive_failures'],1)
             self.assertIsNotNone(health['last_error'])
             self.assertIn('planning_calls_today',store.snapshot()['metrics'])
+
+    def test_history_is_searchable_and_paginated(self):
+        from opendots.store import Store
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);store=Store(root/'state.db');store.register_targets((Target('t','T','Test',root,(),{}),))
+            for n in range(5):store.ingest({'id':f'event-{n}','type':'test'},[('t',50,True,'test')])
+            first=store.history(limit=2);second=store.history(before=first['next_before'],limit=2)
+            self.assertFalse({w['id'] for w in first['work']} & {w['id'] for w in second['work']})
+            self.assertEqual(len(store.history(query='event-3')['work']),1)
+            self.assertEqual(store.detail(1)['work']['event_id'],'event-0')
