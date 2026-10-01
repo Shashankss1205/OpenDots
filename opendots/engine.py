@@ -43,6 +43,10 @@ def process_lock(database):
 class Engine:
     def __init__(self, config, agent=None, registry=None, agents=None):
         self.config = config
+        storage = config.database.resolve().parent / "workspaces"
+        for target in config.targets:
+            if config.database.resolve().is_relative_to(target.workspace.resolve()) or storage.is_relative_to(target.workspace.resolve()):
+                raise ValueError("Runtime database and managed storage must be outside source workspaces")
         self.targets = {target.id: target for target in config.targets}
         self.store = Store(config.database)
         self.store.register_targets(config.targets)

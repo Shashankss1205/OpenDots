@@ -31,6 +31,8 @@ class Workspaces:
             if not path.is_dir():
                 raise RuntimeError("Persisted task workspace is missing; inspect before resubmitting work")
             return replace(target, workspace=path)
+        if self.root.resolve().is_relative_to(target.workspace.resolve()):
+            raise ValueError("Managed storage must be outside the source workspace")
         key = hashlib.sha256(target.id.encode()).hexdigest()[:16]
         repository = self.root / "repositories" / key
         if not (repository / ".git").is_dir():
@@ -38,7 +40,7 @@ class Workspaces:
                 shutil.rmtree(repository)
             repository.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(target.workspace, repository, symlinks=True,
-                            ignore=shutil.ignore_patterns(".git", ".env*", ".aws", ".ssh", ".codex", "__pycache__", "node_modules"))
+                            ignore=shutil.ignore_patterns(".git", ".env*", ".aws", ".ssh", ".codex", "__pycache__", "node_modules", ".venv", "venv", ".opendots", ".spots"))
             git(repository, "init", "--initial-branch=main")
             git(repository, "add", "-A")
             git(repository, "commit", "--allow-empty", "-m", "Snapshot owner-configured target workspace")
