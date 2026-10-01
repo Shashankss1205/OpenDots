@@ -1,0 +1,5 @@
+{
+  "kind": "Deployment",
+  "metadata": {"name": "demo-service"},
+  "spec": {"replicas": 0, "image": "demo-service:local"}
+}

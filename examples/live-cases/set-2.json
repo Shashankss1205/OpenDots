@@ -1,0 +1,80 @@
+[
+  {
+    "id": "versions",
+    "package": "packaging",
+    "commit": "f58537628042c7f29780b9d33f31597e7fc9d664",
+    "objective": "Repair version ordering regression and preserve equality and ordering semantics.",
+    "policy": "approval",
+    "write_paths": [
+      "src/packaging/version.py"
+    ],
+    "mutations": [
+      [
+        "src/packaging/version.py",
+        "return self._key < other._key",
+        "return self._key <= other._key"
+      ]
+    ]
+  },
+  {
+    "package": "cachetools",
+    "commit": "ca7508fd56103a1b6d6f17c8e93e36c60b44ca25",
+    "objective": "Repair LRU eviction and TTL expiry regressions using actual full-suite results.",
+    "write_paths": [
+      "src/cachetools/__init__.py"
+    ],
+    "mutations": [
+      [
+        "src/cachetools/__init__.py",
+        "\"\"\"Remove and return the `(key, value)` pair least recently used.\"\"\"\n        try:\n            key = next(iter(self.__order))",
+        "\"\"\"Remove and return the `(key, value)` pair least recently used.\"\"\"\n        try:\n            key = next(reversed(self.__order))"
+      ],
+      [
+        "src/cachetools/__init__.py",
+        "return self.timer() < link.expires",
+        "return self.timer() <= link.expires"
+      ]
+    ],
+    "id": "caches",
+    "policy": "approval"
+  },
+  {
+    "id": "cli",
+    "package": "click",
+    "commit": "934813e4d421071a1b3db3973c02fe2721359a6e",
+    "objective": "Repair integer range clamping behavior for open upper and lower bounds.",
+    "policy": "auto",
+    "write_paths": [
+      "src/click/types.py"
+    ],
+    "mutations": [
+      [
+        "src/click/types.py",
+        "return bound + dir",
+        "return bound - dir"
+      ]
+    ]
+  },
+  {
+    "package": "cachetools",
+    "commit": "ca7508fd56103a1b6d6f17c8e93e36c60b44ca25",
+    "objective": "Repair LRU eviction and TTL expiry regressions using actual full-suite results.",
+    "write_paths": [
+      "src/cachetools/__init__.py"
+    ],
+    "mutations": [
+      [
+        "src/cachetools/__init__.py",
+        "\"\"\"Remove and return the `(key, value)` pair least recently used.\"\"\"\n        try:\n            key = next(iter(self.__order))",
+        "\"\"\"Remove and return the `(key, value)` pair least recently used.\"\"\"\n        try:\n            key = next(reversed(self.__order))"
+      ],
+      [
+        "src/cachetools/__init__.py",
+        "return self.timer() < link.expires",
+        "return self.timer() <= link.expires"
+      ]
+    ],
+    "id": "cache-draft",
+    "policy": "draft"
+  }
+]
