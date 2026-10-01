@@ -18,6 +18,7 @@ class CapacityError(RuntimeError):
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS targets(id TEXT PRIMARY KEY, state TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, body TEXT NOT NULL, created REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS event_keys(key TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS event_time ON events(created);
 CREATE TABLE IF NOT EXISTS work(
  id INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL REFERENCES events(id),
@@ -105,6 +106,10 @@ class Store:
                 if found["body"] != body:
                     raise ValueError("An event ID cannot be reused with a different payload")
                 return {"event_id": event["id"], "duplicate": True, "queued": 0}
+            if event.get("dedup_key"):
+                alias=db.execute("SELECT event_id FROM event_keys WHERE key=?",(event["dedup_key"],)).fetchone()
+                if alias:
+                    return {"event_id":alias[0],"duplicate":True,"queued":0}
             recent = db.execute("SELECT count(*) FROM events WHERE created>?", (now-60,)).fetchone()[0]
             if recent >= self.event_rate_limit:
                 raise CapacityError("Event rate limit reached; retry later")
@@ -113,6 +118,8 @@ class Store:
                 if accepted and queued >= self.queue_limit:
                     raise CapacityError(f"Queue limit reached for {target_id}; retry after capacity is available")
             db.execute("INSERT INTO events VALUES(?,?,?)", (event["id"], body, now))
+            if event.get("dedup_key"):
+                db.execute("INSERT INTO event_keys VALUES(?,?)",(event["dedup_key"],event["id"]))
             queued = 0
             self.log(db, "event_received", {"id": event["id"], "type": event["type"]})
             for target_id, priority, accepted, reason in matches:
