@@ -38,6 +38,8 @@ def main():
     accept = commands.add_parser("accept", help="Use a reviewed proposal as the base of future work")
     accept.add_argument("work_id", type=int)
     accept.add_argument("--commit", required=True)
+    sync = commands.add_parser("sync", help="Replace the task base with a fresh source snapshot; stop the service first")
+    sync.add_argument("target_id")
     pause = commands.add_parser("pause")
     pause.add_argument("target_id")
     resume = commands.add_parser("resume")
@@ -95,6 +97,10 @@ def main():
             print(json.dumps(engine.workspaces.proposal(args.work_id), indent=2))
         elif args.command == "accept":
             print(json.dumps(engine.workspaces.accept(args.work_id, args.commit)))
+        elif args.command == "sync":
+            from .engine import process_lock
+            with process_lock(engine.config.database):
+                print(json.dumps(engine.workspaces.sync(engine.targets[args.target_id]), indent=2))
         elif args.command == "decide":
             print(json.dumps(engine.store.decide(args.work_id, args.decision == "approve")))
         else:
