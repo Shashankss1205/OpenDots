@@ -94,3 +94,21 @@ requiring Playwright and Chromium. It uses a controlled assessor against the act
 local HTTP runtime, checking listener visibility, JSON preview/submission, HTML
 escaping, event detail, search, live refresh, and mobile width. CI runs it separately;
 it does not make a live Claude/Codex acceptance claim.
+
+## Shared plugin framework
+
+`tests/test_plugins.py` covers actual Python entry-point discovery, API 1
+compatibility, version/config/name validation, multi-capability ownership,
+registration rollback and the normal approval boundary for plugin tools.
+Listener tests cover lazy startup, persisted cursors, duplicate replay, queue
+capacity failures, reconnects without starving polling, shutdown on scheduler
+failure and invalidation of callbacks from failed attempts.
+
+The portable suite passes 120 tests with the two namespace-only cases skipped on
+the development host. A clean virtual environment installed both the runtime
+wheel and the plugin package copied from `docs/PLUGINS.md`; discovery, options,
+CLI inventory and the documented handler worked outside the source checkout.
+The browser integration script also asserts visible built-in plugin ownership.
+CI separately exercises real namespace isolation and installed/container runs.
+These checks do not claim authenticated Slack, Discord or live-model validation;
+no native Slack/Discord adapter is introduced by the framework.

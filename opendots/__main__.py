@@ -39,6 +39,7 @@ def main():
     drain.add_argument("--timeout", type=int, default=300)
     commands.add_parser("status")
     commands.add_parser("listeners", help="List active input configuration and subscriptions")
+    commands.add_parser("plugins", help="List loaded plugins and capability ownership; does not start listeners")
     events = commands.add_parser("events", help="Browse received events and relevance decisions")
     events.add_argument("--before", type=int)
     events.add_argument("--query", default="")
@@ -112,6 +113,8 @@ def main():
             serve(engine, args.host, args.port)
         elif args.command == "listeners":
             print(json.dumps(engine.listeners(), indent=2))
+        elif args.command == "plugins":
+            print(json.dumps(engine.plugins.snapshot(), indent=2))
         elif args.command == "events":
             print(json.dumps(engine.store.events(args.before, args.query, args.target), indent=2))
         elif args.command == "event":

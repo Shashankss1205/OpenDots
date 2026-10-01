@@ -60,6 +60,8 @@ class AgentRegistry:
         self.agents = {}
 
     def register(self, name, agent):
+        if not isinstance(name, str) or not name or not callable(getattr(agent, "plan", None)):
+            raise ValueError("An agent provider needs a name and a plan method")
         if name in self.agents:
             raise ValueError("Agent provider already registered")
         self.agents[name] = agent

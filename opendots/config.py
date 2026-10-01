@@ -50,6 +50,7 @@ class Config:
     max_model_calls_per_day: int = 1000
     claude_command: str = "claude"
     claude_home: str | None = None
+    plugin_config: dict = field(default_factory=dict)
 
 
 def validate_config(raw):
@@ -62,6 +63,13 @@ def validate_config(raw):
             raise ValueError(f"config.{key} must be an integer >= {minimum}")
     if not isinstance(raw.get("plugins",[]),list) or any(not isinstance(v,str) or not v for v in raw.get("plugins",[])):
         raise ValueError("config.plugins must be an array of installed extension names")
+    if len(set(raw.get("plugins", []))) != len(raw.get("plugins", [])):
+        raise ValueError("config.plugins must contain unique names")
+    options = raw.get("plugin_config", {})
+    if not isinstance(options, dict) or any(not isinstance(v, dict) for v in options.values()):
+        raise ValueError("config.plugin_config must map enabled plugin names to objects")
+    if set(options) - set(raw.get("plugins", [])):
+        raise ValueError("config.plugin_config may only configure enabled plugins")
     if not isinstance(raw.get("planner_env",[]),list) or any(not isinstance(v,str) for v in raw.get("planner_env",[])):
         raise ValueError("planner_env must name explicitly allowed environment variables")
     if raw.get("planner_home") is not None and not isinstance(raw["planner_home"],str):
@@ -198,6 +206,8 @@ def load_config(path: Path) -> Config:
     sources = raw.get("sources", [])
     source_ids = set()
     for source in sources:
+        if not isinstance(source.get("kind"), str) or not source["kind"]:
+            raise ValueError("Source kind must name a registered adapter")
         if not isinstance(source.get("id"), str) or not source["id"] or source["id"] in source_ids:
             raise ValueError("Source IDs must be nonempty and unique")
         source_ids.add(source["id"])
@@ -216,4 +226,5 @@ def load_config(path: Path) -> Config:
                   int(raw.get("max_events_per_minute",1000)), int(raw.get("priority_aging_seconds",60)), raw.get("context_limits",{}), tuple(raw.get("planner_env",[])),
                   str((base/raw["planner_home"]).resolve()) if raw.get("planner_home") else None,
                   int(raw.get("max_model_calls_per_day",1000)), raw.get("claude_command", "claude"),
-                  str((base/raw["claude_home"]).resolve()) if raw.get("claude_home") else None)
+                  str((base/raw["claude_home"]).resolve()) if raw.get("claude_home") else None,
+                  raw.get("plugin_config", {}))

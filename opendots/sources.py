@@ -1,190 +1,174 @@
-"""Real, replaceable inputs into one durable stream. No outbound writes."""
+"""Shared lifecycle for polling adapters and persistent event listeners."""
 from concurrent.futures import ThreadPoolExecutor
-import hashlib
-import hmac
+from copy import deepcopy
 import json
-import os
-from pathlib import Path
-import re
 import time
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+import threading
+
+# Preserve existing imports for extension authors.
+from .connectors.github import GitHubPollSource, normalize_github, verify_github_signature
+from .connectors.jsonl import JSONLSource
 
 
-def verify_github_signature(body, signature, secret):
-    if not secret or not isinstance(signature, str):
-        raise ValueError("GitHub webhook secret/signature missing")
-    expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, signature):
-        raise ValueError("GitHub webhook signature mismatch")
+class ListenerContext:
+    """One listener attempt. Acknowledge upstream only after emit returns successfully."""
+    def __init__(self, registry, source_id, ingest):
+        self._registry, self._source_id, self._ingest = registry, source_id, ingest
+        self.stop_event = registry.listener_stop
+        self._closed = threading.Event()
+        self.state = deepcopy(registry._state(source_id).get("cursor", {}))
 
+    def ready(self):
+        """Call after authentication/subscription succeeds, not just thread creation."""
+        self._active()
+        self._registry._health(self._source_id, status="listening", last_success=time.time(), last_error=None)
 
-def normalize_github(kind, payload, delivery_id, repo=None):
-    if not isinstance(payload, dict):
-        raise ValueError("GitHub payload must be an object")
-    mapping = {"IssuesEvent": "issues", "PullRequestEvent": "pull_request", "IssueCommentEvent": "issue_comment",
-               "WatchEvent": "star", "PushEvent": "push", "ReleaseEvent": "release"}
-    kind = mapping.get(kind, kind)
-    action = payload.get("action", "created")
-    if kind == "star":
-        event_type = "github.star"
-    else:
-        names = {"issues": "issue", "pull_request": "pr", "issue_comment": "comment", "discussion": "discussion"}
-        event_type = f"github.{names.get(kind, kind)}.{action}"
-    repository = repo or payload.get("repository", {}).get("full_name")
-    entity = payload.get("issue") or payload.get("pull_request") or payload.get("discussion") or payload
-    comment = payload.get("comment") or payload.get("review")
-    content = comment if isinstance(comment, dict) else entity
-    labels = entity.get("labels", [])
-    label_names = [label.get("name", "") if isinstance(label, dict) else str(label) for label in labels]
-    severity = "critical" if any("critical" in name.lower() for name in label_names) else "normal"
-    event = {"id": "github:" + str(delivery_id), "type": event_type, "source": "github",
-            "payload": {"repo": repository, "title": entity.get("title", event_type), "body": content.get("body", ""),
-                        "action": action, "actor": payload.get("sender", {}).get("login"),
-                        "comment_id": content.get("id") if comment else None,
-                        "issue_body": entity.get("body", "") if comment else None,
-                        "ref": payload.get("ref"), "before": payload.get("before"),
-                        "after": payload.get("after"), "commits": payload.get("commits", []),
-                        "number": entity.get("number"), "url": content.get("html_url") or entity.get("html_url"), "severity": severity,
-                        "labels": label_names}}
-    stamp=content.get("updated_at") or content.get("created_at")
-    identity=content.get("id")
-    if kind == "push":
-        identity=payload.get("ref");stamp=payload.get("after")
-    if repository and identity is not None and stamp:
-        semantic=[repository,event_type,str(identity),stamp]
-        event["dedup_key"]="github:"+hashlib.sha256(json.dumps(semantic,sort_keys=True).encode()).hexdigest()
-    return event
+    def _active(self):
+        if self.stop_event.is_set() or self._closed.is_set():
+            raise RuntimeError("Event listener attempt is stopped")
 
+    def emit(self, event):
+        self._active()
+        receipt = self._ingest(event)
+        self._registry._health(self._source_id, last_received=time.time(), last_success=time.time(),
+                               last_error=None, consecutive_failures=0)
+        return receipt
 
-
-class GitHubPollSource:
-    def __init__(self, config):
-        self.config = config
-        self.repo = config["repo"]
-        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.repo):
-            raise ValueError("GitHub source repo must be owner/name")
-
-    def poll(self, state):
-        headers = {"Accept": "application/vnd.github+json", "User-Agent": "OpenDots-local-runtime", "X-GitHub-Api-Version": "2022-11-28"}
-        token = os.environ.get(self.config.get("token_env", "GITHUB_TOKEN"))
-        if token:
-            headers["Authorization"] = "Bearer " + token
-        if state.get("etag"):
-            headers["If-None-Match"] = state["etag"]
-        request = Request(f"https://api.github.com/repos/{self.repo}/events?per_page=100", headers=headers)
-        try:
-            with urlopen(request, timeout=10) as response:
-                body = response.read(2_000_001)
-                if len(body) > 2_000_000:
-                    raise ValueError("GitHub response too large")
-                items = json.loads(body)
-                state = {**state, "etag": response.headers.get("ETag"),
-                         "poll_interval": max(int(self.config.get("interval_seconds", 60)), int(response.headers.get("X-Poll-Interval", 60)))}
-        except HTTPError as exc:
-            if exc.code == 304:
-                return [], state
-            raise RuntimeError(f"GitHub polling HTTP {exc.code}; check rate limits and configured credentials") from None
-        if not isinstance(items, list):
-            raise ValueError("GitHub returned an invalid event list")
-        previous=set(state.get("seen_ids", []))
-        page=1
-        max_pages=max(1,int(self.config.get("max_pages",5)))
-        while previous and items and not previous.intersection(str(item["id"]) for item in items) and len(items)%100==0 and page<max_pages:
-            page+=1
-            paged_headers={key:value for key,value in headers.items() if key != "If-None-Match"}
-            paged=Request(f"https://api.github.com/repos/{self.repo}/events?per_page=100&page={page}",headers=paged_headers)
-            with urlopen(paged,timeout=10) as response:
-                body=response.read(2_000_001)
-                if len(body)>2_000_000:raise ValueError("GitHub page too large")
-                batch=json.loads(body)
-            if not isinstance(batch,list):raise ValueError("Invalid GitHub page")
-            items.extend(batch)
-            if len(batch)<100:break
-        ids=[str(item["id"]) for item in items]
-        if previous and items and not previous.intersection(ids):
-            state["gap_detected_at"]=time.time()
-            state["gap_message"]="Previous cursor not found in available event history; reconcile repository state"
-        state["seen_ids"]=ids[:max_pages*100]
-        events = [normalize_github(item["type"], item["payload"], item["id"], self.repo) for item in reversed(items) if str(item["id"]) not in previous]
-        if not state.get("initialized") and self.config.get("bootstrap", "observe") == "observe":
-            # Avoid creating work for old history on first connection.
-            events = []
-        state["initialized"] = True
-        return events, state
-
-
-class JSONLSource:
-    def __init__(self, config):
-        self.config = config
-        self.path = Path(config["path"])
-
-    def poll(self, state):
-        if not self.path.exists():
-            return [], state
-        offset = int(state.get("offset", 0))
-        stat = self.path.stat()
-        identity = [stat.st_dev, stat.st_ino]
-        size = stat.st_size
-        if size < offset or (state.get("identity") and state["identity"] != identity):
-            offset = 0
-        events = []
-        rejected = []
-        batch_size = max(1, int(self.config.get("batch_size", 1000)))
-        with self.path.open("rb") as handle:
-            handle.seek(offset)
-            for _ in range(batch_size):
-                start = handle.tell()
-                line = handle.readline(256_001)
-                if len(line) > 256_000:
-                    # Consume this complete oversized record without retaining it in memory.
-                    while line and not line.endswith(b"\n"):
-                        line = handle.readline(256_001)
-                    if not line:
-                        offset = start
-                        break
-                    rejected.append({"offset":start,"error":"Record exceeds 256000 bytes"})
-                    offset = handle.tell()
-                    continue
-                if not line or not line.endswith(b"\n"):
-                    # An incomplete append is retried, not acknowledged.
-                    offset = start
-                    break
-                try:
-                    event = json.loads(line)
-                    if not isinstance(event, dict) or not isinstance(event.get("type"), str) or not event["type"]:
-                        raise ValueError("Record needs a nonempty type")
-                except (ValueError, UnicodeDecodeError) as exc:
-                    rejected.append({"offset":start,"sha256":hashlib.sha256(line).hexdigest(),"error":str(exc)[:300]})
-                    offset = handle.tell()
-                    continue
-                event.setdefault("id", "jsonl:" + self.config["id"] + ":" + str(start) + ":" + hashlib.sha256(line).hexdigest())
-                event.setdefault("source", "file")
-                events.append(event)
-                offset = handle.tell()
-        return events, {**state, "offset": offset, "identity": identity, "rejected": rejected}
+    def checkpoint(self, state):
+        """Persist a JSON cursor after durable receipt; never checkpoint rejected deliveries."""
+        self._active()
+        if not isinstance(state, dict):
+            raise ValueError("Listener checkpoint must be a JSON object")
+        encoded = json.dumps(state, allow_nan=False)
+        if len(encoded.encode()) > 256_000:
+            raise ValueError("Listener checkpoint exceeds size limit")
+        self.state = json.loads(encoded)
+        self._registry._health(self._source_id, cursor=self.state)
 
 
 class SourceRegistry:
-    def __init__(self, configs, store):
+    def __init__(self, configs, store, *, builtins=True):
         self.store = store
-        self.factories = {"github_poll": GitHubPollSource, "jsonl": JSONLSource}
+        self.factories = {}
+        self.modes = {}
+        self.validators = {}
         self.configs = configs
         self.instances = {}
         self.pool = None
         self.pending = {}
         self.workers = 4
+        self.listeners = {}
+        self.listener_stop = threading.Event()
+        self.closed = False
+        if builtins:
+            from .builtin_plugins import register_sources
+            register_sources(self)
 
-    def register(self, kind, factory):
+    def register(self, kind, factory, *, validate_config=None):
+        self._register(kind, factory, "poll", validate_config)
+
+    def register_listener(self, kind, factory, *, validate_config=None):
+        self._register(kind, factory, "listener", validate_config)
+
+    def _register(self, kind, factory, mode, validator):
+        if not isinstance(kind, str) or not kind or not callable(factory):
+            raise ValueError("A source adapter needs a name and callable factory")
+        if validator is not None and not callable(validator):
+            raise ValueError("Source configuration validator must be callable")
         if kind in self.factories:
             raise ValueError("Source kind already registered")
         self.factories[kind] = factory
+        self.modes[kind] = mode
+        self.validators[kind] = validator
+
+    def validate_configs(self):
+        ids = set()
+        for config in self.configs:
+            source_id = config.get("id")
+            if not isinstance(source_id, str) or not source_id or source_id in ids:
+                raise ValueError("Source IDs must be nonempty and unique")
+            ids.add(source_id)
+            kind = config.get("kind")
+            if not isinstance(kind, str) or kind not in self.factories:
+                raise ValueError(f"Unknown source adapter for {source_id}: {kind}; enable its plugin first")
+            if type(config.get("interval_seconds", 5)) is not int or config.get("interval_seconds", 5) < 1:
+                raise ValueError("Source interval_seconds must be positive")
+            if self.validators[kind]:
+                self.validators[kind](deepcopy(config))
+
+    def _state(self, source_id):
+        with self.store.connect() as db:
+            row = db.execute("SELECT state FROM source_state WHERE id=?", (source_id,)).fetchone()
+        return json.loads(row[0]) if row else {}
+
+    def _health(self, source_id, **changes):
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT state FROM source_state WHERE id=?", (source_id,)).fetchone()
+            state = json.loads(row[0]) if row else {}
+            state.update(changes)
+            db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state",
+                       (source_id, json.dumps(state)))
+
+    def start_listeners(self, ingest, *, stop_event=None):
+        if self.closed:
+            raise RuntimeError("Source registry is closed; create a new Engine to restart")
+        if stop_event is not None:
+            if self.listeners and stop_event is not self.listener_stop:
+                raise ValueError("Cannot replace the stop signal of running listeners")
+            self.listener_stop = stop_event
+        self.validate_configs()
+        for config in self.configs:
+            if self.modes[config["kind"]] != "listener" or config["id"] in self.listeners:
+                continue
+            thread = threading.Thread(target=self._listen, args=(config, ingest),
+                                      name="opendots-listener-" + config["id"], daemon=True)
+            self.listeners[config["id"]] = thread
+            try:
+                thread.start()
+            except Exception:
+                del self.listeners[config["id"]]
+                raise
+
+    def _listen(self, config, ingest):
+        source_id = config["id"]
+        while not self.listener_stop.is_set():
+            context = None
+            try:
+                self._health(source_id, status="starting", next_poll=None)
+                context = ListenerContext(self, source_id, ingest)
+                listener = self.factories[config["kind"]](deepcopy(config))
+                listener.run(context)
+                if not self.listener_stop.is_set():
+                    raise RuntimeError("Listener exited before shutdown")
+            except Exception as exc:
+                if context is not None:
+                    context._closed.set()
+                if self.listener_stop.is_set():
+                    break
+                failures = self._state(source_id).get("consecutive_failures", 0) + 1
+                delay = min(30, 2 ** min(failures, 5))
+                error = str(exc)[:1000]
+                self._health(source_id, status="retrying", last_error=error,
+                             last_failure=time.time(), consecutive_failures=failures,
+                             next_poll=time.time() + delay)
+                with self.store.connect() as db:
+                    self.store.log(db, "source_failed", {"source": source_id, "error": error})
+                self.listener_stop.wait(delay)
+            finally:
+                if context is not None:
+                    context._closed.set()
+        self._health(source_id, status="stopped", next_poll=None)
 
     def poll_due(self, ingest, now=None, asynchronous=False):
+        if self.closed:
+            raise RuntimeError("Source registry is closed")
         now = time.time() if now is None else now
         if asynchronous and self.pool is None:
             self.pool = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="opendots-source")
         for config in self.configs:
+            if self.modes.get(config["kind"], "poll") != "poll":
+                continue
             key = config["id"]
             if asynchronous:
                 pending = self.pending.get(key)
@@ -197,6 +181,15 @@ class SourceRegistry:
                 self._poll_one(config, ingest, now)
 
     def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        self.listener_stop.set()
+        deadline = time.monotonic() + 5
+        for source_id, thread in self.listeners.items():
+            thread.join(max(0, deadline - time.monotonic()))
+            if thread.is_alive():
+                self._health(source_id, status="stop_timeout", last_error="Plugin listener did not stop within five seconds")
         if self.pool:
             self.pool.shutdown(wait=True, cancel_futures=True)
             self.pool = None
@@ -206,7 +199,7 @@ class SourceRegistry:
         with self.store.connect() as db:
             row = db.execute("SELECT state FROM source_state WHERE id=?", (source_id,)).fetchone()
         state = json.loads(row[0]) if row else {}
-        if state.get("next_poll", 0) > now:
+        if (state.get("next_poll") or 0) > now:
             return
         started=time.monotonic()
         try:
@@ -214,14 +207,14 @@ class SourceRegistry:
                 self.instances[source_id] = self.factories[config["kind"]](config)
             events, next_state = self.instances[source_id].poll(state)
             for event in events:
-                if config["kind"] == "github_poll":
+                if getattr(self.instances[source_id], "skip_existing_ids", False):
                     with self.store.connect() as db:
                         if db.execute("SELECT 1 FROM events WHERE id=?",(event["id"],)).fetchone():
                             continue
                 try:
                     ingest(event)
                 except (ValueError, TypeError) as exc:
-                    if config["kind"] != "jsonl":
+                    if not getattr(self.instances[source_id], "reject_invalid_records", False):
                         raise
                     with self.store.connect() as db:
                         self.store.log(db, "source_record_rejected", {"source":source_id,"event":event,"error":str(exc)[:1000]})

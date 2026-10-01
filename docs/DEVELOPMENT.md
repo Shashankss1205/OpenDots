@@ -89,11 +89,12 @@ claim to prove arbitrary natural-language goals. Every configured condition must
 
 ## Installable extensions
 
-Install an owner-trusted Python package into the OpenDots environment, then list
-its entry-point name in `plugins`. Packages declare an `opendots.plugins` entry
-point pointing to `register(api)`. API version 1 exposes `api.agents`, `api.tools`
-and `api.sources`; use their registration methods. Only explicitly listed plugins
-are loaded. Plugins run as trusted application code; they are not sandboxed.
+Use the [shared plugin framework guide](PLUGINS.md) for package installation,
+manifest/config contracts, capability registration, polling and persistent
+listeners. Built-ins and enabled packages share the same PluginManager. API 2
+exports a `Plugin` object; legacy `register(api)` entry points continue on API 1.
+Only explicitly named installed packages load. Plugins are trusted Python code,
+not sandboxed. `opendots plugins`, `/plugins` and the web inventory show ownership.
 
 Custom tools can pass `schema={"type":"object", ...}` to `register` instead of
 string-only `arg_names`. Supported schema types are object, array, string, boolean,

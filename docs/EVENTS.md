@@ -169,7 +169,7 @@ These are not native adapters. Run a consumer, webhook receiver, or file-watchin
 
 For a broker, acknowledge only after successful ingestion (HTTP 202); retry failures and HTTP 429. Ingestion acknowledges durable receipt, not completed work. A rejected relevance decision is still a successfully received message. Idempotent delivery IDs prevent retries creating duplicate tasks. Producer authentication and transport are the bridge's responsibility.
 
-Trusted Python extensions can register additional adapters through `SourceRegistry.register`. [Development](DEVELOPMENT.md#installable-extensions) describes installation. The adapter list shown by `/listeners` comes from the actual registry, not a fixed number of connectors.
+Trusted Python plugins can register polling adapters through `api.sources.register` or persistent connections through `api.sources.register_listener`. The [plugin guide](PLUGINS.md) covers installation, lifecycle, cursor persistence and upstream acknowledgments. `/plugins` shows capability ownership; `/listeners` shows each configured connection's mode and health. Native Slack/Discord adapters are not bundled.
 
 ## How goal relevance and confidence work
 

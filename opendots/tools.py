@@ -107,14 +107,15 @@ def bounded_process(command, cwd, timeout, stdin=None, env=None, output_path=Non
 
 class ToolRegistry:
     """Add new handlers without changing the scheduler or target count."""
-    def __init__(self, sandbox="bubblewrap"):
+    def __init__(self, sandbox="bubblewrap", *, builtins=True):
         self.sandbox = sandbox
         self.schemas = {}
-        self.handlers = {"read_file": self.read_file, "write_file": self.write_file, "replace_text": self.replace_text,
-                         "run_check": self.run_check, "note": self.note}
-        self.arg_names = {"read_file": ["path"], "write_file": ["path", "content", "expected_sha256"],
-                          "replace_text": ["path", "old_text", "new_text", "expected_sha256"],
-                          "run_check": ["name"], "note": ["text"]}
+        self.handlers = {}
+        self.arg_names = {}
+        if builtins:
+            from types import SimpleNamespace
+            from .builtin_plugins import register_local_tools
+            register_local_tools(SimpleNamespace(tools=self), self)
 
     def register(self, name, handler, arg_names=None, schema=None):
         if name in self.handlers:

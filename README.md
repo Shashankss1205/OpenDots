@@ -17,8 +17,11 @@ A **heartbeat** is a scheduled check-in. An **event** is a message from you or a
 - Read project files, propose scoped edits, and run checks you configure.
 - Ask for approval, retain local patches, and preserve history across restarts.
 - Manage multiple agents through a terminal or a local web interface.
+- Extend providers, tools and polling or persistent event listeners through a [shared plugin framework](docs/PLUGINS.md).
 
 This is a local prototype. It does not automatically publish PRs, deploy applications, or pull upstream changes. Model access comes from your provider account. Checks prove only what you configure them to test.
+
+Inspect loaded integrations with `opendots plugins`, `/plugins` in the TUI, or **Loaded plugins** in the web interface. Connection status appears under `/listeners`. Slack and Discord require a connector plugin or an external bridge; they are not bundled integrations.
 
 ## What you need
 
@@ -109,6 +112,7 @@ Then type a normal message about your goal. It becomes an `owner.request` event 
 | Command | What it does |
 | --- | --- |
 | `/listeners` | See configured sources, subscriptions, schedules, and relevance settings. |
+| `/plugins` | Inspect loaded plugins, versions, and the capabilities each owns. |
 | `/events` / `/event ID` | Browse received events and inspect payloads, routing reasons, and confidence. |
 | `/send TYPE MESSAGE` | Create a message with your chosen event type. |
 | `/connect` | Learn how to connect an event producer. |
@@ -147,6 +151,7 @@ Native Slack, email, Kafka, Redis, and arbitrary filesystem-watch adapters are n
 
 ## Documentation
 
+- [Plugins](docs/PLUGINS.md): install packages and build providers, tools, polling adapters or persistent listeners.
 - [Events and listeners](docs/EVENTS.md): create messages, connect tools, inspect history and relevance.
 - [Provider setup](docs/PROVIDERS.md): Claude Code and Codex authentication.
 - [Implementation](docs/IMPLEMENTATION.md): configuration, policies, event routing, and storage.
