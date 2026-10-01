@@ -55,15 +55,18 @@ class Engine:
         if not agents:
             self.agents.register("demo", DemoAgent())
             self.agents.register("codex", CodexAgent(config.codex_command, config.model, config.agent_timeout, self.registry))
-        if agent is None:
-            for target in config.targets:
-                self.agents.get(target.agent or config.backend)
         self.agent = agent
         database_key = hashlib.sha256(config.database.name.encode()).hexdigest()[:16]
         self.workspaces = Workspaces(config.database.parent / "workspaces" / database_key, self.store)
         from .sources import SourceRegistry
         self.sources = SourceRegistry(config.sources, self.store)
         self.sources.workers = config.source_workers
+        if config.plugins:
+            from .extensions import ExtensionAPI, load_extensions
+            load_extensions(config.plugins, ExtensionAPI(self.agents, self.registry, self.sources))
+        if agent is None:
+            for target in config.targets:
+                self.agents.get(target.agent or config.backend)
         self.stop_event = threading.Event()
 
     def ingest(self, raw):

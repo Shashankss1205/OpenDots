@@ -86,3 +86,11 @@ Targets may define `success_conditions`, independently checked before completion
 Use `equals` for exact typed JSON/text equality, or `minimum` for numbers.
 Text is the default format. Conditions complement required checks and do not
 claim to prove arbitrary natural-language goals. Every configured condition must pass.
+
+## Installable extensions
+
+Install an owner-trusted Python package into the OpenDots environment, then list
+its entry-point name in `plugins`. Packages declare an `opendots.plugins` entry
+point pointing to `register(api)`. API version 1 exposes `api.agents`, `api.tools`
+and `api.sources`; use their registration methods. Only explicitly listed plugins
+are loaded. Plugins run as trusted application code; they are not sandboxed.
