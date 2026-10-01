@@ -44,7 +44,8 @@ def initialize(directory=None, workspace=None, backend='claude', goal=None, demo
                               {'types': ['timer.heartbeat'], 'sources': ['timer']}],
             'policy': {'read_file': 'auto', 'note': 'auto', 'write_file': 'approval',
                        'replace_text': 'approval', 'run_check': 'approval'},
-            'write_paths': [], 'checks': {}, 'required_checks': []}],
+            'write_paths': [], 'checks': {}, 'required_checks': [],
+            'relevance': {'mode': 'model', 'minimum_confidence': 0.7}}],
             'sources': [], 'schedules': []}
         if heartbeat:
             config['schedules'] = [{'id': 'project-heartbeat', 'target_id': 'project',

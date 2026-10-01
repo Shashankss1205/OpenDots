@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS targets(id TEXT PRIMARY KEY, state TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, body TEXT NOT NULL, created REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS event_keys(key TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS event_time ON events(created);
+CREATE TABLE IF NOT EXISTS event_decisions(
+ event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ target_id TEXT NOT NULL REFERENCES targets(id), body TEXT NOT NULL,
+ PRIMARY KEY(event_id,target_id));
 CREATE TABLE IF NOT EXISTS work(
  id INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL REFERENCES events(id),
  target_id TEXT NOT NULL REFERENCES targets(id), priority INTEGER NOT NULL,
@@ -96,7 +100,7 @@ class Store:
         db.execute("INSERT INTO audit(at,kind,target_id,work_id,detail) VALUES(?,?,?,?,?)",
                    (time.time(), kind, target_id, work_id, json.dumps(detail)))
 
-    def ingest(self, event, matches):
+    def ingest(self, event, matches, decisions=()):
         body = json.dumps(event, sort_keys=True)
         now = time.time()
         with self.connect() as db:
@@ -120,6 +124,9 @@ class Store:
             db.execute("INSERT INTO events VALUES(?,?,?)", (event["id"], body, now))
             if event.get("dedup_key"):
                 db.execute("INSERT INTO event_keys VALUES(?,?)",(event["dedup_key"],event["id"]))
+            for decision in decisions:
+                db.execute("INSERT INTO event_decisions VALUES(?,?,?)",
+                           (event["id"], decision["target_id"], json.dumps(decision)))
             queued = 0
             self.log(db, "event_received", {"id": event["id"], "type": event["type"]})
             for target_id, priority, accepted, reason in matches:
@@ -132,7 +139,7 @@ class Store:
                     actual["open_issues"] = list(dict.fromkeys(actual.get("open_issues", []) + [event["id"]]))
                 state["last_observed_event"] = event["id"]
                 db.execute("UPDATE targets SET state=? WHERE id=?", (json.dumps(state), target_id))
-                self.log(db, "attention", {"priority": priority, "accepted": accepted, "reason": reason}, target_id)
+                self.log(db, "attention", {"event_id": event["id"], "priority": priority, "accepted": accepted, "reason": reason}, target_id)
                 if accepted:
                     db.execute("INSERT INTO work(event_id,target_id,priority,created,updated) VALUES(?,?,?,?,?)",
                                (event["id"], target_id, priority, now, now))
@@ -140,6 +147,61 @@ class Store:
             if not matches:
                 self.log(db, "event_ignored", {"reason": "No matching subscription", "event_id": event["id"]})
             return {"event_id": event["id"], "duplicate": False, "queued": queued}
+
+    def relevance_decision(self, event_id, target_id):
+        with self.connect() as db:
+            row = db.execute("SELECT body FROM event_decisions WHERE event_id=? AND target_id=?",
+                             (event_id, target_id)).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def save_relevance(self, work, result):
+        with self.connect() as db:
+            row = db.execute("SELECT body FROM event_decisions WHERE event_id=? AND target_id=?",
+                             (work["event_id"], work["target_id"])).fetchone()
+            decision = json.loads(row[0]) if row else {"target_id": work["target_id"]}
+            decision.update(result, assessed_at=time.time())
+            db.execute("INSERT INTO event_decisions VALUES(?,?,?) ON CONFLICT(event_id,target_id) DO UPDATE SET body=excluded.body",
+                       (work["event_id"], work["target_id"], json.dumps(decision)))
+            self.log(db, "event_relevance_assessed", {"event_id": work["event_id"], **decision}, work["target_id"], work["id"])
+
+    @staticmethod
+    def _event_row(db, row, full=False):
+        body = json.loads(row["body"])
+        decisions = []
+        for item in db.execute("""SELECT d.body,w.id work_id,w.status work_status FROM event_decisions d
+                LEFT JOIN work w ON w.event_id=d.event_id AND w.target_id=d.target_id WHERE d.event_id=? ORDER BY d.target_id""", (body["id"],)):
+            decisions.append({**json.loads(item["body"]), "work_id": item["work_id"], "work_status": item["work_status"]})
+        # Older databases still expose events, with no invented historical assessments.
+        if not decisions:
+            for work in db.execute("SELECT id,target_id,status FROM work WHERE event_id=?", (body["id"],)):
+                decisions.append({"target_id": work["target_id"], "status": "legacy_unassessed", "confidence": None,
+                                  "reason": "Received before relevance records were available", "work_id": work["id"], "work_status": work["status"]})
+        result = {"sequence": row["sequence"], "id": body["id"], "type": body["type"], "source": body["source"],
+                  "title": str(body.get("payload", {}).get("title", ""))[:500], "created": row["created"], "decisions": decisions}
+        if full: result["event"] = body
+        return result
+
+    def events(self, before=None, query="", target=None, limit=30):
+        if not 1 <= limit <= 100: raise ValueError("Event limit must be 1-100")
+        clauses=[]; values=[]
+        if before is not None:
+            clauses.append("e.rowid<?");values.append(int(before))
+        if query:
+            clauses.append("e.body LIKE ?");values.append("%"+query+"%")
+        if target:
+            clauses.append("(EXISTS (SELECT 1 FROM event_decisions d WHERE d.event_id=e.id AND d.target_id=?) OR EXISTS (SELECT 1 FROM work w WHERE w.event_id=e.id AND w.target_id=?))")
+            values.extend([target,target])
+        where=" WHERE "+" AND ".join(clauses) if clauses else ""
+        with self.connect() as db:
+            rows=db.execute("SELECT e.rowid sequence,e.* FROM events e"+where+" ORDER BY e.rowid DESC LIMIT ?",(*values,limit+1)).fetchall()
+            return {"events": [self._event_row(db,row) for row in rows[:limit]],
+                    "next_before": rows[limit-1]["sequence"] if len(rows)>limit else None}
+
+    def event_detail(self, event_id):
+        with self.connect() as db:
+            row=db.execute("SELECT rowid sequence,* FROM events WHERE id=?", (event_id,)).fetchone()
+            if not row: raise ValueError("Event not found")
+            return self._event_row(db,row,True)
 
     def claim(self, target_ids):
         if not target_ids:

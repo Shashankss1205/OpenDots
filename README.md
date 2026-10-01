@@ -12,6 +12,7 @@ A **heartbeat** is a scheduled check-in. An **event** is a message from you or a
 
 - Pursue your saved goal using Claude Code or Codex.
 - React to terminal requests, local HTTP messages, JSONL files, and GitHub activity.
+- Assess matching events against each goal, with a visible confidence estimate and reason.
 - Revisit progress on a configurable heartbeat schedule.
 - Read project files, propose scoped edits, and run checks you configure.
 - Ask for approval, retain local patches, and preserve history across restarts.
@@ -69,7 +70,7 @@ opendots init --workspace "$PWD" --goal "Describe what you want this agent to ac
 
 Use `--backend codex` if that is your provider. No sample project, predefined repair, or demo event is created.
 
-The command prints your configuration path. By default it is `~/.config/opendots/config.json` (or under `XDG_CONFIG_HOME`). Open that file to review your saved goal and settings. Normal setup starts with **reads and notes allowed, no writable paths, no configured checks, and no heartbeat**. Before enabling changes, set `write_paths`, `checks`, and `required_checks` for your project.
+The command prints your configuration path. By default it is `~/.config/opendots/config.json` (or under `XDG_CONFIG_HOME`). Open that file to review your saved goal and settings. Normal setup starts with **reads and notes allowed, no writable paths, no configured checks, model goal-relevance assessment enabled, and no heartbeat**. Before enabling changes, set `write_paths`, `checks`, and `required_checks` for your project.
 
 Want periodic work? Add `--heartbeat 1800` to `init` for a 30-minute check-in. A heartbeat can start work immediately when the runtime starts, and uses your provider's allowance. You can also configure schedules later.
 
@@ -107,6 +108,10 @@ Then type a normal message about your goal. It becomes an `owner.request` event 
 
 | Command | What it does |
 | --- | --- |
+| `/listeners` | See configured sources, subscriptions, schedules, and relevance settings. |
+| `/events` / `/event ID` | Browse received events and inspect payloads, routing reasons, and confidence. |
+| `/send TYPE MESSAGE` | Create a message with your chosen event type. |
+| `/connect` | Learn how to connect an event producer. |
 | `/status` | Show the provider, source health, and model usage. |
 | `/activity` | See what is happening. |
 | `/reviews` | Find work waiting for approval. |
@@ -123,6 +128,8 @@ Accepting a completed proposal makes its commit the base of future tasks; it doe
 
 ## Connect incoming information
 
+Use `/listeners` and `/events` in the terminal, or **What is listening?** and **Received events** in the web interface. The web form can preview and send arbitrary JSON payloads.
+
 A **source** brings messages into OpenDots. A **subscription** specifies which message types an agent listens to. Setting up one without the other does not create useful work.
 
 | Method | How information arrives |
@@ -134,10 +141,13 @@ A **source** brings messages into OpenDots. A **subscription** specifies which m
 | GitHub webhook | A separately configured receiver forwards signed deliveries. |
 | Heartbeat | OpenDots emits a scheduled event while running. |
 
+**[Create events and connect sources](docs/EVENTS.md)** explains each setup with producer commands, subscription rules, and how confidence controls execution. New setups assess matching events before actions; uncertain decisions block work for inspection. Confidence is a model estimate, not a calibrated probability.
+
 Native Slack, email, Kafka, Redis, and arbitrary filesystem-watch adapters are not built in. External tools can bridge into HTTP or JSONL. GitHub activity does not automatically refresh the agent's source-code snapshot.
 
 ## Documentation
 
+- [Events and listeners](docs/EVENTS.md): create messages, connect tools, inspect history and relevance.
 - [Provider setup](docs/PROVIDERS.md): Claude Code and Codex authentication.
 - [Implementation](docs/IMPLEMENTATION.md): configuration, policies, event routing, and storage.
 - [Development and operations](docs/DEVELOPMENT.md): checks, packaging, services, backup, and source refresh.

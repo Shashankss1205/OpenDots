@@ -99,8 +99,13 @@ class Engine:
         if len(json.dumps(event).encode()) > 256_000:
             raise ValueError("Event exceeds V0 size limit")
         matches = []
+        decisions = []
         for target in self.targets.values():
+            decision = {"target_id": target.id, "goal": target.objective, "method": "rules", "confidence": None,
+                        "status": "filtered", "reason": "No matching subscription"}
+            decisions.append(decision)
             if "target_id" in event and event["target_id"] != target.id:
+                decision["reason"] = "Event explicitly addresses another target"
                 continue
             subscribed = any(
                 any(fnmatch.fnmatchcase(event["type"], pattern) for pattern in rule["types"])
@@ -115,12 +120,29 @@ class Engine:
             default = {"critical": 100, "high": 80, "normal": 50, "low": 10}.get(severity, 50)
             priority = event.get("priority", 5 if event["type"] == "github.star" else default)
             reason = "Explicit priority" if "priority" in event else f"Severity rule: {severity or 'normal'}"
-            matches.append((target.id, priority, priority >= target.minimum_priority, reason))
-        return self.store.ingest(event, matches)
+            accepted = priority >= target.minimum_priority
+            decision.update(priority=priority, subscribed=True)
+            if not accepted:
+                decision["reason"] = f"Priority {priority} is below target minimum {target.minimum_priority}"
+            else:
+                enabled = target.relevance.get("mode", "off") == "model"
+                decision.update(status="pending" if enabled else "disabled",
+                    method="model" if enabled else "rules", minimum_confidence=target.relevance.get("minimum_confidence", 0.7),
+                    reason="Subscription matched; waiting for goal relevance assessment" if enabled else "Subscription matched; semantic relevance is disabled")
+            matches.append((target.id, priority, accepted, reason))
+        return self.store.ingest(event, matches, decisions)
 
     def process(self, work):
         target = self.targets[work["target_id"]]
         try:
+            if self.store.cancellation_requested(work["id"]) or self.stop_event.is_set():
+                self.store.finish(work, "cancelled" if not self.stop_event.is_set() else "interrupted", "Stopped before assessment")
+                return
+            if not self._assess_relevance(target, work):
+                return
+            if self.store.cancellation_requested(work["id"]) or self.stop_event.is_set():
+                self.store.finish(work, "cancelled" if not self.stop_event.is_set() else "interrupted", "Stopped after assessment")
+                return
             target = self.workspaces.prepare(target, work)
             while True:
                 if self.store.cancellation_requested(work["id"]):
@@ -226,11 +248,43 @@ class Engine:
         except Exception as exc:
             self.store.finish(work, "failed", str(exc)[:8000])
 
+    def _assess_relevance(self, target, work):
+        if target.relevance.get("mode", "off") != "model":
+            return True
+        assessment_key = hashlib.sha256(json.dumps({"goal": target.objective, "desired_state": target.desired_state,
+            "relevance": target.relevance, "provider": target.agent or self.config.backend,
+            "model": self.config.model}, sort_keys=True).encode()).hexdigest()
+        previous = self.store.relevance_decision(work["event_id"], target.id)
+        # An action awaiting approval resumes without a second assessment or model charge.
+        if previous and previous.get("status") == "relevant" and previous.get("assessment_key") == assessment_key:
+            return True
+        provider = self.agent or self.agents.get(target.agent or self.config.backend)
+        try:
+            if not callable(getattr(provider, "assess_relevance", None)):
+                raise ValueError("Provider does not implement goal relevance; configure a supported provider or explicitly turn relevance off")
+            self.store.reserve_model_call(target.id, target.model_calls_per_day, self.config.max_model_calls_per_day)
+            from .agents import validate_relevance
+            result = validate_relevance(provider.assess_relevance(target, self.store.event(work["event_id"])))
+            minimum = target.relevance.get("minimum_confidence", 0.7)
+            status = result["decision"] if result["confidence"] >= minimum else "uncertain"
+            self.store.save_relevance(work, {**result, "status": status, "method": "model", "goal": target.objective,
+                                            "provider": target.agent or self.config.backend, "minimum_confidence": minimum, "assessment_key": assessment_key})
+            if status == "relevant": return True
+            self.store.finish(work, "ignored" if status == "irrelevant" else "blocked",
+                "Goal relevance: " + status + ". " + result["reason"])
+        except Exception as exc:
+            # Failed/budget-exhausted assessments must not silently start task actions.
+            reason = str(exc)[:2000]
+            self.store.save_relevance(work, {"status": "error", "method": "model", "confidence": None,
+                                            "reason": reason, "goal": target.objective})
+            self.store.finish(work, "blocked", "Relevance assessment unavailable: " + reason)
+        return False
+
     def retry(self, work_id, inspected=False):
         if not inspected:
             raise ValueError("Inspect prior effects before retrying; set inspected=true")
         previous=self.store.detail(work_id)["work"]
-        if previous["status"] not in {"failed","interrupted","blocked","cancelled","rejected","drafted"}:
+        if previous["status"] not in {"failed","interrupted","blocked","cancelled","rejected","drafted","ignored"}:
             raise ValueError("Only terminal unsuccessful work can be retried")
         event=self.store.event(previous["event_id"])
         event.pop("dedup_key",None)
@@ -349,8 +403,27 @@ class Engine:
         for target in data["targets"]:
             if target["id"] in self.targets:
                 spec = self.targets[target["id"]]
-                target.update(name=spec.name, objective=spec.objective, policy=spec.policy, subscriptions=spec.subscriptions)
+                target.update(name=spec.name, objective=spec.objective, policy=spec.policy, subscriptions=spec.subscriptions, relevance=spec.relevance)
         data.update(backend=self.config.backend, workers=self.config.workers,
                     tool_names=list(self.registry.handlers), sandbox=self.config.sandbox,
                     source_names=[item["id"] for item in self.config.sources], agent_names=list(self.agents.agents))
+        data["listeners"] = self.listeners()
+        data["event_stream"] = self.store.events(limit=20)
         return data
+
+    def listeners(self):
+        with self.store.connect() as db:
+            states = {row["id"]: json.loads(row["state"]) for row in db.execute("SELECT * FROM source_state")}
+        sources=[]
+        # Only public setup fields; extension configs may contain arbitrary secrets.
+        for item in self.config.sources:
+            public={key:item[key] for key in ("id","kind","path","repo","interval_seconds","bootstrap") if key in item}
+            state=states.get(item["id"],{})
+            public["health"]={key:state[key] for key in ("last_success","last_error","next_poll","last_event_count","gap_message") if key in state}
+            sources.append(public)
+        return {"sources": sources, "schedules": list(self.config.schedules),
+                "available_adapters": list(self.sources.factories),
+                "inputs": [{"kind":"http", "endpoint":"/api/events", "description":"Local HTTP, terminal and web event creation"},
+                           {"kind":"github_webhook", "endpoint":"/api/webhooks/github", "configured":bool(os.environ.get("OPENDOTS_GITHUB_WEBHOOK_SECRET") or os.environ.get("SPOTS_GITHUB_WEBHOOK_SECRET"))}],
+                "targets": [{"id":t.id,"goal":t.objective,"subscriptions":list(t.subscriptions),
+                             "minimum_priority":t.minimum_priority,"relevance":t.relevance} for t in self.targets.values()]}

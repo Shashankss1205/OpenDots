@@ -79,3 +79,18 @@ routing are controlled test inputs, not evidence of live model success.
 No authenticated Claude Code or Codex CLI was available for a fresh model run
 during these additions. Follow [the guide](GOALS_AND_EVENTS.md) to perform that
 acceptance with your own installed provider.
+
+## Explicit onboarding and event relevance
+
+Normal initialization now requires an owner-provided workspace and goal; deterministic
+fixtures require explicit `--demo` (or `OPENDOTS_DEMO=1` for container fixtures).
+Event tests cover subscription rejection, priority filtering, asynchronous relevance,
+invalid/confidence/error/budget handling before workspace creation, deduplication,
+JSONL ingestion, persisted pagination, and the HTTP/TUI inspection commands.
+Confidence is a provider estimate, not a calibrated probability.
+
+`python scripts/check_event_ui.py` is a development-only browser integration check
+requiring Playwright and Chromium. It uses a controlled assessor against the actual
+local HTTP runtime, checking listener visibility, JSON preview/submission, HTML
+escaping, event detail, search, live refresh, and mobile width. CI runs it separately;
+it does not make a live Claude/Codex acceptance claim.

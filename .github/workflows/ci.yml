@@ -72,3 +72,16 @@ jobs:
         run: |
           docker compose logs
           docker compose down --volumes
+  event-interface:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser test dependencies
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Exercise event controls against a real local runtime
+        run: python scripts/check_event_ui.py

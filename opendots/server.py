@@ -48,7 +48,20 @@ def make_server(engine, host="127.0.0.1", port=8765):
             if not self.local_request():
                 return
             route = urlparse(self.path).path
-            if route == "/api/work" or re.fullmatch(r"/api/work/[1-9][0-9]*", route):
+            if route == "/api/listeners":
+                self.send(200, engine.listeners())
+            elif route == "/api/events" or route.startswith("/api/events/"):
+                try:
+                    query = parse_qs(urlparse(self.path).query)
+                    if route == "/api/events":
+                        self.send(200, engine.store.events(
+                            int(query['before'][0]) if 'before' in query else None,
+                            query.get('q',[''])[0],query.get('target',[None])[0],int(query.get('limit',['30'])[0])))
+                    else:
+                        self.send(200, engine.store.event_detail(unquote(route[len('/api/events/'):])) )
+                except (ValueError, TypeError) as exc:
+                    self.send(400, {"error": str(exc)})
+            elif route == "/api/work" or re.fullmatch(r"/api/work/[1-9][0-9]*", route):
                 try:
                     query=parse_qs(urlparse(self.path).query)
                     before=int(query['before'][0]) if 'before' in query else None
