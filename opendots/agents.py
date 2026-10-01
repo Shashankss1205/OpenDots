@@ -18,7 +18,7 @@ def plan_schema(registry):
             {"type": "object", "additionalProperties": False, "required": ["tool", "args"],
              "properties": {"tool": {"type": "string", "enum": [tool]}, "args": {
                  "type": "object", "additionalProperties": False, "required": args,
-                 "properties": {key: {"type": "string"} for key in args}}}}
+                 "properties": {key: {"type": "string"} for key in args}, **registry.schemas.get(tool, {})}}}
             for tool, args in registry.arg_names.items()
         ]}}
     }
