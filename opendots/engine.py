@@ -60,6 +60,7 @@ class Engine:
         self.workspaces = Workspaces(config.database.parent / "workspaces" / database_key, self.store)
         from .sources import SourceRegistry
         self.sources = SourceRegistry(config.sources, self.store)
+        self.sources.workers = config.source_workers
         self.stop_event = threading.Event()
 
     def ingest(self, raw):
@@ -282,7 +283,7 @@ class Engine:
             running = set()
             while not self.stop_event.is_set():
                 self.tick_schedules()
-                self.sources.poll_due(self.ingest)
+                self.sources.poll_due(self.ingest, asynchronous=True)
                 for future in tuple(running):
                     if future.done():
                         future.result()
