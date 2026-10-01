@@ -75,6 +75,9 @@
       },
       "write_paths": [
         "deployment.json"
+      ],
+      "required_checks": [
+        "deployment"
       ]
     },
     {
@@ -149,6 +152,9 @@
       },
       "write_paths": [
         "src/*.jsx"
+      ],
+      "required_checks": [
+        "accessibility"
       ]
     }
   ],

@@ -66,3 +66,11 @@ Use the relaxed test command only for explicitly trusted disposable fixtures wit
 The dashboard is a local control surface. Public hosting needs deliberate authentication/proxy design; request guards are not a multi-user login system.
 
 Extend agents with `AgentRegistry.register`, named-string tools with `ToolRegistry.register`, and normalized adapters with `SourceRegistry.register`. Grant new tools explicitly; custom handlers own their scope/preview safety. See [IMPLEMENTATION.md](IMPLEMENTATION.md).
+
+## Completion policy
+
+The shipped demo and init templates require their named checks. For real targets,
+configure `required_checks` explicitly before enabling writes. Investigation-only
+targets may leave it empty; their completion summary reports no checks.
+Failed checks return diagnostics to real planners for up to `max_repair_attempts`
+(default 2), still bounded by `max_planning_rounds`. Set zero to disable repair.

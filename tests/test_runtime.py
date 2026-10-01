@@ -26,6 +26,8 @@ class RuntimeTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         shutil.copytree(ROOT / "examples", self.root / "examples")
         self.config = load_config(self.root / "examples/config.json")
+        # These cases isolate routing/policy; check enforcement has dedicated tests.
+        self.config = replace(self.config, targets=tuple(replace(t, required_checks=()) for t in self.config.targets))
         if (os.environ.get("OPENDOTS_TEST_SANDBOX") or os.environ.get("SPOTS_TEST_SANDBOX")) == "trusted-local":
             self.config = replace(self.config, sandbox="trusted-local")
         self.engine = Engine(self.config)
