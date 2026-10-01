@@ -10,7 +10,7 @@ async function request(path, body) {
 function showError(error) {$('error').textContent = error.message; $('error').hidden = false;}
 function render(data) {
   current = data;
-  renderListeners(data.listeners);
+  renderListeners(data.listeners);renderNotifications(data.notifications);
   if (eventLive) renderEventStream(data.event_stream);
   $('connection').textContent = 'Connected to local workers';
   $('backend').textContent = data.backend === 'demo' ? 'DEMO · deterministic recipes' :
@@ -187,3 +187,13 @@ $('events-older').addEventListener('click',async()=>{eventLive=false;try{await l
 $('event-live').addEventListener('click',()=>{eventLive=true;eventQuery='';$('event-search').value='';refresh();});
 $('close-event').addEventListener('click',()=>$('event-dialog').close());
 refresh();setInterval(refresh,1000);
+
+function renderNotifications(data){
+  if(!data)return;
+  const root=$('notification-list'),key=JSON.stringify(data);
+  if(root.dataset.key===key)return;root.dataset.key=key;root.replaceChildren();
+  if(data.error)root.append(el('p','event-help',data.error));
+  if(!data.destinations.length)root.append(el('p','empty','No notification destinations configured. Add a webhook or local JSONL destination to your configuration.'));
+  for(const route of data.destinations){const card=el('article','listener-card');card.append(el('h3',null,`${route.id} · ${route.kind} · ${route.enabled?'enabled':'disabled'}`),el('p',null,route.events.join(', ')));root.append(card);}
+  for(const delivery of data.deliveries.slice(0,10)){const card=el('article','event-card');card.append(el('h3',null,`${delivery.route_id}: ${delivery.status}`),el('p','muted',`${delivery.id} · attempts ${delivery.attempts}`));if(delivery.error)card.append(el('p',null,delivery.error));root.append(card);}
+}

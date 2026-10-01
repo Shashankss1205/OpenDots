@@ -37,6 +37,7 @@ class PluginAPI:
     sources: object
     config: dict
     version: int = API_VERSION
+    notifications: object = None
 
 
 class _Registration:
@@ -52,16 +53,18 @@ class _SourceRegistration(_Registration):
 
 
 class PluginManager:
-    def __init__(self, agents, tools, sources):
+    def __init__(self, agents, tools, sources, notifications=None):
         self.agents, self.tools, self.sources = agents, tools, sources
+        from .notifications import NotificationRegistry
+        self.notifications = notifications if notifications is not None else NotificationRegistry()
         self.records = []
-        self.owners = {"agents": {}, "tools": {}, "sources": {}}
+        self.owners = {"agents": {}, "tools": {}, "sources": {}, "notifications": {}}
         for capability, values in self._capabilities().items():
             self.owners[capability].update({name: "application" for name in values})
 
     def _capabilities(self):
         return {"agents": self.agents.agents, "tools": self.tools.handlers,
-                "sources": self.sources.factories}
+                "sources": self.sources.factories, "notifications": self.notifications.factories}
 
     def load(self, plugin, config=None, *, origin="installed", legacy=False):
         manifest = plugin.manifest
@@ -89,14 +92,17 @@ class PluginManager:
         tools.arg_names, tools.schemas = deepcopy(self.tools.arg_names), deepcopy(self.tools.schemas)
         sources.factories = dict(self.sources.factories)
         sources.modes, sources.validators = dict(self.sources.modes), dict(self.sources.validators)
+        notifications = copy(self.notifications)
+        notifications.factories, notifications.validators = dict(self.notifications.factories), dict(self.notifications.validators)
         before = {kind: set(entries) for kind, entries in self._capabilities().items()}
         if legacy:
             from .extensions import ExtensionAPI
             api = ExtensionAPI(agents, tools, sources)
         else:
-            api = PluginAPI(_Registration(agents), _Registration(tools), _SourceRegistration(sources), options)
+            api = PluginAPI(_Registration(agents), _Registration(tools), _SourceRegistration(sources), options,
+                            notifications=_Registration(notifications))
         plugin.register(api)
-        after = {"agents": agents.agents, "tools": tools.handlers, "sources": sources.factories}
+        after = {"agents": agents.agents, "tools": tools.handlers, "sources": sources.factories, "notifications": notifications.factories}
         for kind, entries in self._capabilities().items():
             if any(name not in after[kind] or after[kind][name] is not value for name, value in entries.items()):
                 raise ValueError(f"Plugin {manifest.id} cannot replace existing {kind}")
@@ -107,11 +113,14 @@ class PluginManager:
         self.sources.factories.update(sources.factories)
         self.sources.modes.update(sources.modes)
         self.sources.validators.update(sources.validators)
+        self.notifications.factories.update(notifications.factories)
+        self.notifications.validators.update(notifications.validators)
         # Legacy providers may retain their API registries for later schema generation.
         # Keep those views live after commit so subsequent plugins remain visible.
         agents.agents = self.agents.agents
         tools.handlers, tools.arg_names, tools.schemas = self.tools.handlers, self.tools.arg_names, self.tools.schemas
         sources.factories, sources.modes, sources.validators = self.sources.factories, self.sources.modes, self.sources.validators
+        notifications.factories, notifications.validators = self.notifications.factories, self.notifications.validators
         capabilities = {kind: sorted(set(values) - before[kind]) for kind, values in after.items()}
         for kind, names in capabilities.items():
             self.owners[kind].update({name: manifest.id for name in names})

@@ -1,13 +1,12 @@
 # Connect capabilities through one plugin framework
 
 A plugin is an installed Python package that supplies one or more **agent
-providers**, **event adapters**, or **tools**. One Slack package could eventually
+providers**, **event adapters**, **tools**, or **notification destinations**. One Slack package could eventually
 own its listener, thread-reading tool and reply tool. You enable the package once;
 each configured connection gets its own ID, cursor and health state.
 
-OpenDots now uses this framework for its built-in capabilities too. Native Slack,
-Discord, MCP, notification and memory-provider integrations are not included by
-this change. Slack/Discord SDK integration remains work for a connector package.
+OpenDots now uses this framework for its built-in capabilities too. Native Slack/Discord message listeners, MCP and memory-provider integrations are not included.
+[Notification destinations](NOTIFICATIONS.md) support JSONL and webhooks, including Slack/Discord formats. Slack/Discord SDK integration remains work for a connector package.
 
 ## See what is loaded
 
@@ -31,6 +30,7 @@ and polling. Inspection commands and `drain` do not open source connections.
 | `builtin.codex` | `codex` agent provider |
 | `builtin.github` | `github_poll` event adapter |
 | `builtin.jsonl` | `jsonl` event adapter |
+| `builtin.notifications` | `webhook` and `jsonl` notification destinations |
 | `builtin.demo` | `demo` provider, only when explicitly selected |
 
 Built-ins need no entry in `plugins`. Existing provider names, source kinds,
@@ -132,6 +132,7 @@ API version 2 exposes these registration surfaces:
 
 | Call | Contract |
 | --- | --- |
+| `api.notifications.register(kind, factory, validate_config=...)` | Factory returns a bounded `send(message)` sink; see [notifications](NOTIFICATIONS.md) |
 | `api.agents.register(name, provider)` | Provider has `plan(target, event, state)`; model relevance also requires `assess_relevance(target, event)` |
 | `api.tools.register(name, handler, arg_names)` | Handler receives `(target, args)` and returns a JSON-compatible result |
 | `api.tools.register(name, handler, schema=...)` | Typed object arguments using OpenDots' supported schema subset |

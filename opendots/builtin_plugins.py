@@ -43,6 +43,7 @@ def load_builtins(manager, config, *, local_tools=True, providers=True):
     from .agents import ClaudeAgent, CodexAgent, DemoAgent
     from .connectors.github import GitHubPollSource
     from .connectors.jsonl import JSONLSource
+    from .notifications import WebhookNotification, JSONLNotification, validate_webhook, validate_jsonl as validate_notification_jsonl
 
     def add(name, description, register):
         manager.load(Plugin(PluginManifest("builtin." + name, __version__, description), register), origin="builtin")
@@ -62,3 +63,7 @@ def load_builtins(manager, config, *, local_tools=True, providers=True):
         "github_poll", GitHubPollSource, validate_config=validate_github))
     add("jsonl", "Append-only JSON event inbox", lambda api: api.sources.register(
         "jsonl", JSONLSource, validate_config=validate_jsonl))
+    def notifications(api):
+        api.notifications.register("webhook", WebhookNotification, validate_config=validate_webhook)
+        api.notifications.register("jsonl", JSONLNotification, validate_config=validate_notification_jsonl)
+    add("notifications", "Durable webhook and JSONL notifications", notifications)

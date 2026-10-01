@@ -79,7 +79,7 @@ class PluginTests(unittest.TestCase):
         with patch("opendots.plugins.entry_points", return_value=[entry]):
             engine = Engine(replace(self.config, plugins=("connector",), backend="connector_agent"))
         self.assertEqual(engine.plugins.snapshot()["plugins"][-1]["capabilities"], {
-            "agents": ["connector_agent"], "tools": ["connector_action"], "sources": ["connector_poll"]})
+            "agents": ["connector_agent"], "tools": ["connector_action"], "sources": ["connector_poll"], "notifications": []})
         engine.ingest({"id": "request", "type": "input.report", "payload": {"title": "Fix a problem"}})
         work = engine.drain()["work"][0]
         self.assertEqual(work["status"], "waiting_approval")

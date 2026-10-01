@@ -16,6 +16,7 @@ A **heartbeat** is a scheduled check-in. An **event** is a message from you or a
 - Revisit progress on a configurable heartbeat schedule.
 - Read project files, propose scoped edits, and run checks you configure.
 - Ask for approval, retain local patches, and preserve history across restarts.
+- Send [notifications](docs/NOTIFICATIONS.md) to local files or configured webhooks, including Slack/Discord formats.
 - Manage multiple agents through a terminal or a local web interface.
 - Extend providers, tools and polling or persistent event listeners through a [shared plugin framework](docs/PLUGINS.md).
 
@@ -112,6 +113,7 @@ Then type a normal message about your goal. It becomes an `owner.request` event 
 | Command | What it does |
 | --- | --- |
 | `/listeners` | See configured sources, subscriptions, schedules, and relevance settings. |
+| `/notifications` | See notification destinations and delivery status. |
 | `/plugins` | Inspect loaded plugins, versions, and the capabilities each owns. |
 | `/events` / `/event ID` | Browse received events and inspect payloads, routing reasons, and confidence. |
 | `/send TYPE MESSAGE` | Create a message with your chosen event type. |
@@ -150,6 +152,8 @@ A **source** brings messages into OpenDots. A **subscription** specifies which m
 Native Slack, email, Kafka, Redis, and arbitrary filesystem-watch adapters are not built in. External tools can bridge into HTTP or JSONL. GitHub activity does not automatically refresh the agent's source-code snapshot.
 
 ## Documentation
+
+- [Notifications](docs/NOTIFICATIONS.md): configure alerts, webhooks, retries and delivery history.
 
 - [Plugins](docs/PLUGINS.md): install packages and build providers, tools, polling adapters or persistent listeners.
 - [Events and listeners](docs/EVENTS.md): create messages, connect tools, inspect history and relevance.

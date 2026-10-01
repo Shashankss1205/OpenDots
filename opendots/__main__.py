@@ -40,6 +40,8 @@ def main():
     commands.add_parser("status")
     commands.add_parser("listeners", help="List active input configuration and subscriptions")
     commands.add_parser("plugins", help="List loaded plugins and capability ownership; does not start listeners")
+    notifications = commands.add_parser("notifications", help="Inspect notification destinations and delivery status")
+    notifications.add_argument("--retry", metavar="DELIVERY_ID", help="Retry a failed delivery to the same configured destination")
     events = commands.add_parser("events", help="Browse received events and relevance decisions")
     events.add_argument("--before", type=int)
     events.add_argument("--query", default="")
@@ -115,6 +117,8 @@ def main():
             print(json.dumps(engine.listeners(), indent=2))
         elif args.command == "plugins":
             print(json.dumps(engine.plugins.snapshot(), indent=2))
+        elif args.command == "notifications":
+            print(json.dumps(engine.notifications.retry(args.retry) if args.retry else engine.notifications.snapshot(), indent=2))
         elif args.command == "events":
             print(json.dumps(engine.store.events(args.before, args.query, args.target), indent=2))
         elif args.command == "event":
