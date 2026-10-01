@@ -17,6 +17,8 @@ HELP = '''/agents                 List agents and their status
 /status                 Connector health, queue age and planning usage
 /history [TEXT]         Search task history
 /work ID                Inspect task evidence
+/proposal ID            Review a completed proposal and its patch
+/accept ID COMMIT       Use that exact proposal as the next task base
 /retry ID inspected     Replan after inspecting prior effects
 /pause or /resume       Pause or resume the selected agent
 /send TYPE MESSAGE      Send a particular event type
@@ -99,6 +101,15 @@ class Session:
             return json.dumps(self.client.request('/api/work?q='+quote(argument)),indent=2)
         if command=='/work':
             return json.dumps(self.client.request('/api/work/'+str(int(argument))),indent=2)
+        if command=='/proposal':
+            path='/api/work/'+str(int(argument))
+            proposal=self.client.request(path+'/proposal')
+            patch=self.client.request(path+'/patch')['patch']
+            return json.dumps(proposal,indent=2)+'\n'+patch+f"\nTo accept: /accept {proposal['work_id']} {proposal['commit']}"
+        if command=='/accept':
+            work_id,_,commit=argument.partition(' ')
+            if not commit: raise ValueError('Review /proposal ID, then /accept ID COMMIT')
+            return json.dumps(self.client.request('/api/work/'+str(int(work_id))+'/accept',{'commit':commit}))
         if command=='/reviews':
             return '\n'.join(f"#{w['id']} | {w['target_id']} | {w['plan']['summary']}" for w in self.state['work'] if w['status']=='waiting_approval') or 'Nothing needs your review.'
         if command in {'/review','/approve','/reject'}:

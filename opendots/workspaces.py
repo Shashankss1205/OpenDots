@@ -1,5 +1,6 @@
 from dataclasses import replace
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -45,7 +46,7 @@ class Workspaces:
             git(repository, "add", "-A")
             git(repository, "commit", "--allow-empty", "-m", "Snapshot owner-configured target workspace")
         state = self.store.state(target.id)
-        base = state.get("latest_branch", "main")
+        base = state.get("accepted_branch", "main")
         branch = f"opendots/{key}/task-{work['id']}"
         directory = self.root / "tasks" / str(work["id"])
         directory.parent.mkdir(parents=True, exist_ok=True)
@@ -67,3 +68,40 @@ class Workspaces:
             git(directory, "commit", "-m", f"OpenDots task {work['id']}: proposed local changes")
         return {"branch": work["branch"], "workspace": str(directory), "patch": str(artifact),
                 "changed": changed, "commit": git(directory, "rev-parse", "HEAD")}
+
+    def proposal(self, work_id):
+        with self.store.connect() as db:
+            return self._proposal(db, work_id)
+
+    def _proposal(self, db, work_id):
+        work = db.execute("SELECT * FROM work WHERE id=?", (work_id,)).fetchone()
+        if work is None or work["status"] != "completed":
+            raise ValueError("Only completed work has an acceptable proposal")
+        row = db.execute("SELECT detail FROM audit WHERE work_id=? AND kind='work_completed' ORDER BY id DESC LIMIT 1", (work_id,)).fetchone()
+        artifact = json.loads(row[0]).get("artifact") if row else None
+        if not artifact:
+            raise ValueError("Retained proposal is unavailable")
+        return {"work_id": work_id, "target_id": work["target_id"], "base_ref": work["base_ref"], **artifact}
+
+    def accept(self, work_id, expected_commit):
+        # Serialize with claim(): no task can start against an intermediate base.
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            proposal = self._proposal(db, work_id)
+            if not expected_commit or expected_commit != proposal["commit"]:
+                raise ValueError("Review the proposal and supply its exact commit")
+            target_id = proposal["target_id"]
+            state = json.loads(db.execute("SELECT state FROM targets WHERE id=?", (target_id,)).fetchone()[0])
+            if state.get("accepted_work_id") == work_id:
+                return {"work_id": work_id, "accepted_commit": expected_commit}
+            if db.execute("SELECT 1 FROM work WHERE target_id=? AND status IN ('running','ready','waiting_approval')", (target_id,)).fetchone():
+                raise ValueError("Pause the target and finish or cancel active work before accepting")
+            if proposal["base_ref"] != state.get("accepted_branch", "main"):
+                raise ValueError("Proposal has a stale base; submit fresh work against the accepted base")
+            directory = Path(proposal["workspace"])
+            if git(directory, "rev-parse", "HEAD") != expected_commit or git(directory, "status", "--porcelain", "--untracked-files=all"):
+                raise ValueError("Proposal workspace changed after completion; inspect and replan")
+            state.update(accepted_branch=proposal["branch"], accepted_commit=expected_commit, accepted_work_id=work_id)
+            db.execute("UPDATE targets SET state=? WHERE id=?", (json.dumps(state), target_id))
+            self.store.log(db, "proposal_accepted", proposal, target_id, work_id)
+            return {"work_id": work_id, "accepted_commit": expected_commit}

@@ -120,12 +120,14 @@ print("PASS: sibling files, network, credentials isolated")
         self.assertEqual(source.poll(next_state)[0], [])
         self.assertEqual(source.poll({})[0][0]["id"], events[0]["id"])
 
-    def test_repeated_demo_uses_prior_branch_and_skips_identical_write(self):
+    def test_repeated_demo_uses_accepted_branch_and_skips_identical_write(self):
         engine = Engine(self.config)
         engine.ingest({"id": "one", "type": "github.issue.opened", "payload": {"repo": "kubernetes/kubernetes"}})
         work = engine.drain()["work"][0]
         engine.store.decide(work["id"], True)
         engine.drain()
+        proposal = engine.workspaces.proposal(work['id'])
+        engine.workspaces.accept(work['id'], proposal['commit'])
         engine.ingest({"id": "two", "type": "github.issue.opened", "payload": {"repo": "kubernetes/kubernetes"}})
         final = engine.drain()
         self.assertEqual(final["counts"], {"completed": 2})

@@ -58,6 +58,11 @@ and `/help`. Type a request for a target subscribed to `owner.request`, or use
 confirmation is required. `/quit` or Ctrl+D disconnects without stopping agents.
 The browser and terminal use the same runtime state and approval tokens.
 
+Completed changes remain proposals until you accept them. Use `/proposal ID` to
+inspect the patch, then `/accept ID COMMIT` with the displayed commit to make it
+the base for future tasks. Acceptance retains changes locally; your source
+repository is unchanged. Pause the target and finish or cancel active work first.
+
 ## Use a real agent
 
 Install and authenticate the Codex CLI, then set `"backend": "codex"` in your configuration. OpenDots asks Codex for structured plans and executes permitted actions through its own tool registry. You can configure workers, models, subscriptions, write scopes, required checks, schedules, and providers.

@@ -62,6 +62,11 @@ def make_server(engine, host="127.0.0.1", port=8765):
                 self.send(200, engine.snapshot())
             elif route == "/api/health":
                 self.send(200, {"status": "ok", "backend": engine.config.backend})
+            elif match := re.fullmatch(r"/api/work/([1-9][0-9]*)/proposal", route):
+                try:
+                    self.send(200, engine.workspaces.proposal(int(match[1])))
+                except ValueError as exc:
+                    self.send(400, {"error": str(exc)})
             elif match := re.fullmatch(r"/api/work/([1-9][0-9]*)/patch", route):
                 work_id = int(match[1])
                 with engine.store.connect() as db:
@@ -123,6 +128,8 @@ def make_server(engine, host="127.0.0.1", port=8765):
                     self.send(202,engine.retry(int(match[1]),isinstance(body,dict) and body.get("inspected") is True))
                 elif match := re.fullmatch(r"/api/work/([1-9][0-9]*)/cancel", route):
                     self.send(200,engine.store.cancel(int(match[1])))
+                elif match := re.fullmatch(r"/api/work/([1-9][0-9]*)/accept", route):
+                    self.send(200, engine.workspaces.accept(int(match[1]), body.get("commit")))
                 elif route == "/api/events":
                     self.send(202, engine.ingest(body))
                 elif route.startswith("/api/work/") and route.endswith("/decision"):
@@ -136,7 +143,7 @@ def make_server(engine, host="127.0.0.1", port=8765):
                     self.send(404, {"error": "Not found"})
             except CapacityError as exc:
                 self.send(429, {"error": str(exc)})
-            except (ValueError, TypeError, KeyError) as exc:
+            except (ValueError, TypeError, KeyError, RuntimeError, OSError) as exc:
                 self.send(400, {"error": str(exc)})
 
     server = ThreadingHTTPServer((host, port), Handler)
