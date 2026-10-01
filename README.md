@@ -36,7 +36,32 @@ On Ubuntu/Debian, install prerequisites with `sudo apt-get install python3 pytho
 
 Choose **one** method.
 
-### Option A: install from PyPI
+### Option A: one-command installer
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Shashankss1205/OpenDots/main/install.sh | bash
+```
+
+Installs the latest PyPI release into a separate Python environment without sudo
+and adds the `opendots` command under `~/.local/bin`. If that directory is not on
+your PATH, run the PATH instruction printed by the installer and add it to your
+shell startup file. Linux (or WSL2), Python 3.11+, `python3-venv`, Git and
+Bubblewrap must already be installed.
+
+To inspect the script before running it:
+
+```bash
+curl -fsSLo install-opendots.sh https://raw.githubusercontent.com/Shashankss1205/OpenDots/main/install.sh
+bash install-opendots.sh
+```
+
+Pin a PyPI version with `bash -s -- --version 0.2.0` in place of `bash`.
+`--prefix DIR` chooses the environment directory, `--bin-dir DIR` chooses the
+command directory, and `--ref COMMIT` installs a reviewed GitHub revision instead.
+Existing installations and command files are not overwritten. The default
+environment is `~/.local/share/opendots/runtime` (or under `XDG_DATA_HOME`).
+
+### Option B: install with pipx or pip
 
 With [pipx](https://pipx.pypa.io/stable/installation/) installed:
 
@@ -46,21 +71,6 @@ pipx ensurepath
 ```
 
 Alternatively, install in a Python virtual environment with `python -m pip install opendots`.
-
-### Option B: download and run the installer
-
-```bash
-curl -fsSLo install-opendots.sh https://raw.githubusercontent.com/Shashankss1205/OpenDots/main/install.sh
-bash install-opendots.sh
-```
-
-The script installs into a separate Python environment without sudo. Follow its printed PATH instruction; with the default location:
-
-```bash
-export PATH="$HOME/.local/share/opendots/runtime/bin:$PATH"
-```
-
-Add that line to your shell startup file for new terminals. `--prefix DIR` chooses a different installation directory; `--ref COMMIT` pins a reviewed revision. Existing installations are not overwritten.
 
 ### Option C: install the Python package from GitHub
 
