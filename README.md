@@ -58,6 +58,11 @@ and `/help`. Type a request for a target subscribed to `owner.request`, or use
 confirmation is required. `/quit` or Ctrl+D disconnects without stopping agents.
 The browser and terminal use the same runtime state and approval tokens.
 
+Use `/history TEXT` and `/next` to find older work, `/work ID` for evidence,
+`/status` for connector health and daily planning usage, and `/cancel ID` to stop
+a task between actions. Tab completes commands; arrow keys edit the prompt or
+recall previous inputs. Task progress appears in the transcript as work proceeds.
+
 Completed changes remain proposals until you accept them. Use `/proposal ID` to
 inspect the patch, then `/accept ID COMMIT` with the displayed commit to make it
 the base for future tasks. Acceptance retains changes locally; your source

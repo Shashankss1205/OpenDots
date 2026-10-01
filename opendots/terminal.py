@@ -16,17 +16,36 @@ HELP = '''/agents                 List agents and their status
 /activity               Recent activity for the selected agent
 /status                 Connector health, queue age and planning usage
 /history [TEXT]         Search task history
+/next                   Show the next history page
 /work ID                Inspect task evidence
 /proposal ID            Review a completed proposal and its patch
 /accept ID COMMIT       Use that exact proposal as the next task base
 /retry ID inspected     Replan after inspecting prior effects
+/cancel ID              Cancel queued work or request a running task stop
 /pause or /resume       Pause or resume the selected agent
 /send TYPE MESSAGE      Send a particular event type
 /help                   Show this help
 /quit                   Disconnect; background agents keep running
 
 Type a request to send owner.request to the selected agent.
-Up/Down: input history. PageUp/PageDown: transcript. Ctrl+U: clear input.'''
+Up/Down: input history. Left/Right: edit. Tab: commands. PageUp/PageDown: transcript.'''
+
+
+def task_line(work):
+    status=work['status'].replace('_',' ')
+    message=work.get('error') or work.get('summary') or 'Waiting to start'
+    return f"#{work['id']} · {work['target_id']} · {status}\n  {message}"
+
+
+def activity_line(entry):
+    detail=entry['detail'];kind=entry['kind'].replace('_',' ')
+    result=detail.get('result',{}) if isinstance(detail,dict) else {}
+    text=detail.get('summary') or detail.get('error') or detail.get('tool') or ''
+    if isinstance(result,dict):
+        if 'exit_code' in result:
+            text=f"{result.get('name','Check')}: {'passed' if result['exit_code']==0 else 'failed'}"
+        elif 'note' in result:text=result['note']
+    return f"#{entry.get('work_id') or '—'} · {kind}"+(f" · {str(text)[:240]}" if text else '')
 
 
 def safe_text(value):
@@ -62,6 +81,8 @@ class Session:
         self.reviewed={}
         self.confirmation=None
         self.last_audit=0
+        self.history_query=''
+        self.history_before=None
 
     def refresh(self):
         state=self.client.request('/api/state')
@@ -97,10 +118,20 @@ class Session:
             work_id,_,confirmation=argument.partition(' ')
             if confirmation!='inspected':raise ValueError('Inspect /work ID first, then /retry ID inspected. Prior effects are not undone.')
             return json.dumps(self.client.request('/api/work/'+str(int(work_id))+'/retry',{'inspected':True}))
-        if command=='/history':
-            return json.dumps(self.client.request('/api/work?q='+quote(argument)),indent=2)
+        if command=='/cancel':
+            work_id=int(argument)
+            self.client.request(f'/api/work/{work_id}/cancel',{})
+            return f'Stop requested for #{work_id}. A running action finishes before cancellation.'
+        if command in {'/history','/next'}:
+            if command=='/history':self.history_query=argument;self.history_before=None
+            elif self.history_before is None:return 'No more history. Use /history to start a new search.'
+            query='/api/work?limit=20&q='+quote(self.history_query)
+            if self.history_before is not None:query+='&before='+str(self.history_before)
+            page=self.client.request(query);self.history_before=page.get('next_before')
+            return '\n'.join(task_line(work) for work in page['work'])+ ('\n/next for older work.' if self.history_before else '\nEnd of history.')
         if command=='/work':
-            return json.dumps(self.client.request('/api/work/'+str(int(argument))),indent=2)
+            detail=self.client.request('/api/work/'+str(int(argument)))
+            return task_line(detail['work'])+'\n'+'\n'.join(activity_line(a) for a in reversed(detail['audit'][:20]))+'\nFor retained changes: /proposal '+argument
         if command=='/proposal':
             path='/api/work/'+str(int(argument))
             proposal=self.client.request(path+'/proposal')
@@ -130,9 +161,15 @@ class Session:
             self.client.request(f'/api/work/{work_id}/decision',{'approved':False,'approval_token':work['approval_token']})
             return f'Rejected work #{work_id}.'
         if command=='/status':
-            return json.dumps({'sources':self.state.get('sources',[]),'metrics':self.state.get('metrics',{})},indent=2)
+            metrics=self.state.get('metrics',{})
+            calls=sum(row['calls'] for row in metrics.get('planning_calls_today',[]))
+            lines=[f"Planner: {self.state.get('backend','unknown')} · Checks: {self.state.get('sandbox','unknown')}",
+                f"Planning calls today: {calls} · Oldest queued task: {int(metrics.get('oldest_queued_seconds',0))}s"]
+            for source in self.state.get('sources',[]):
+                lines.append(f"{source['id']}: "+('Needs attention — '+str(source['last_error']) if source.get('last_error') else 'No recorded error'))
+            return '\n'.join(lines)
         if command=='/activity':
-            return '\n'.join(f"{a['kind'].replace('_',' ')} | work {a['work_id'] or '-'} | {json.dumps(a['detail'])}" for a in reversed(self.state['audit'][:50]) if a['target_id'] in {None,self.selected}) or 'No recent activity.'
+            return '\n'.join(activity_line(a) for a in reversed(self.state['audit'][:30]) if a['target_id'] in {None,self.selected}) or 'No recent activity.'
         if command in {'/pause','/resume'}:
             target=self.target();self.client.request('/api/targets/'+quote(target['id'],safe='')+'/pause',{'paused':command=='/pause'})
             return f"{target['id']}: {'paused' if command=='/pause' else 'resumed'}."
@@ -156,17 +193,29 @@ def run(url='http://127.0.0.1:8765'):
     def screen(window):
         curses.curs_set(1);window.timeout(150);window.keypad(True)
         transcript=['OpenDots  •  Persistent agents, at your prompt.','/agents  /reviews  /activity  /help','Closing this view leaves the runtime running.']
-        draft='';history=[];history_index=0;scroll=0;last_refresh=0;connection='Connecting';seen={}
+        draft='';cursor=0;history=[];history_index=0;scroll=0;last_refresh=0;connection='Connecting';seen={};initialized=False
+        accent=curses.A_BOLD
+        if curses.has_colors():
+            curses.start_color()
+            try:
+                curses.use_default_colors();curses.init_pair(1,curses.COLOR_CYAN,-1)
+                accent|=curses.color_pair(1)
+            except curses.error:pass
         def append(text):
             transcript.extend(safe_text(text).splitlines());del transcript[:-2000]
         while True:
             if time.monotonic()-last_refresh>2:
                 try:
                     state=session.refresh();connection='Connected'
-                    for work in reversed(state['work']):
+                    recent=state['work'] if initialized else state['work'][:8]
+                    for work in reversed(recent):
                         if seen.get(work['id'])!=work['status'] and work['status'] in {'waiting_approval','completed','failed','blocked','interrupted'}:
-                            append(f"• {work['target_id']} · #{work['id']} · {work['status'].replace('_',' ')}: {work.get('summary') or work.get('error') or ''}")
-                        seen[work['id']]=work['status']
+                            append(task_line(work))
+                    for entry in reversed(state['audit']):
+                        if initialized and entry['id']>session.last_audit and entry['target_id']==session.selected and entry['kind'] in {'work_started','action_completed','action_failed','proposal_accepted'}:
+                            append(activity_line(entry))
+                    session.last_audit=max((a['id'] for a in state['audit']),default=0)
+                    seen={w['id']:w['status'] for w in state['work']};initialized=True
                 except (ValueError,OSError) as exc: connection=str(exc)
                 last_refresh=time.monotonic()
             height,width=window.getmaxyx();window.erase()
@@ -175,29 +224,40 @@ def run(url='http://127.0.0.1:8765'):
                     try: window.addnstr(y,0,safe_text(text),max(0,width-1),attr)
                     except curses.error: pass
             counts=session.state.get('counts',{})
-            put(0,f"OpenDots  |  {session.selected or 'No agent'}  |  {counts.get('running',0)} working  |  {counts.get('waiting_approval',0)} reviews",curses.A_BOLD)
+            put(0,f"OpenDots  |  {session.selected or 'No agent'}  |  {counts.get('running',0)} working  |  {counts.get('waiting_approval',0)} reviews",accent)
             rows=[]
             for line in transcript: rows.extend(textwrap.wrap(line,width=max(10,width-2),replace_whitespace=False) or [''])
             room=max(1,height-5);end=max(0,len(rows)-scroll);start=max(0,end-room)
             for index,line in enumerate(rows[start:end]):put(index+2,line)
             put(height-3,connection,curses.A_DIM)
-            put(height-2,'> '+draft[-max(1,width-4):])
-            put(height-1,'Enter send  /help commands  PgUp/PgDn history  Ctrl+D disconnect',curses.A_DIM)
-            try:window.move(max(0,height-2),min(max(0,width-2),2+len(draft)))
+            offset=max(0,cursor-max(1,width-4))
+            put(height-2,'> '+draft[offset:offset+max(1,width-3)])
+            put(height-1,'Enter send  Tab commands  /help  PgUp/PgDn scroll  Ctrl+D disconnect',curses.A_DIM)
+            try:window.move(max(0,height-2),min(max(0,width-2),2+cursor-offset))
             except curses.error:pass
             window.refresh()
             try:key=window.get_wch()
             except curses.error:continue
             if key=='\x04':break
-            if key=='\x03' or key=='\x15':draft='';continue
+            if key=='\x03' or key=='\x15':draft='';cursor=0;session.confirmation=None;continue
+            if key in (curses.KEY_HOME,'\x01'):cursor=0;continue
+            if key in (curses.KEY_END,'\x05'):cursor=len(draft);continue
+            if key==curses.KEY_LEFT:cursor=max(0,cursor-1);continue
+            if key==curses.KEY_RIGHT:cursor=min(len(draft),cursor+1);continue
+            if key==curses.KEY_DC:draft=draft[:cursor]+draft[cursor+1:];continue
+            if key=='\t':
+                choices=[line.split()[0] for line in HELP.splitlines() if line.startswith('/') and line.split()[0].startswith(draft)]
+                if len(choices)==1:draft=choices[0]+' ';cursor=len(draft)
+                elif choices:append('  '.join(choices));scroll=0
+                continue
             if key==curses.KEY_PPAGE:scroll=min(len(rows),scroll+room);continue
             if key==curses.KEY_NPAGE:scroll=max(0,scroll-room);continue
             if key==curses.KEY_UP:
-                history_index=max(0,history_index-1);draft=history[history_index] if history else '';continue
+                history_index=max(0,history_index-1);draft=history[history_index] if history else '';cursor=len(draft);continue
             if key==curses.KEY_DOWN:
-                history_index=min(len(history),history_index+1);draft=history[history_index] if history_index<len(history) else '';continue
+                history_index=min(len(history),history_index+1);draft=history[history_index] if history_index<len(history) else '';cursor=len(draft);continue
             if key in ('\n','\r',curses.KEY_ENTER):
-                text=draft;draft='';scroll=0
+                text=draft;draft='';cursor=0;scroll=0
                 if not text:continue
                 history.append(text);history_index=len(history);append('> '+text)
                 try:
@@ -206,7 +266,9 @@ def run(url='http://127.0.0.1:8765'):
                     append(answer)
                 except (ValueError,OSError) as exc:append('Needs attention: '+str(exc))
                 last_refresh=0
-            elif key in ('\b','\x7f',curses.KEY_BACKSPACE):draft=draft[:-1]
-            elif isinstance(key,str) and key.isprintable() and len(draft)<8000:draft+=key
+            elif key in ('\b','\x7f',curses.KEY_BACKSPACE):
+                if cursor:draft=draft[:cursor-1]+draft[cursor:];cursor-=1
+            elif isinstance(key,str) and key.isprintable() and len(draft)<8000:
+                draft=draft[:cursor]+key+draft[cursor:];cursor+=1
     try:curses.wrapper(screen)
     except KeyboardInterrupt:pass
