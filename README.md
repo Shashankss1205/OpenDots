@@ -33,6 +33,21 @@ Open **http://127.0.0.1:8765**, click **Run five-event demo**, and review the pr
 
 For disposable fixtures on a host without working namespaces, explicitly set `"sandbox": "trusted-local"` in [the configuration](examples/config.json). This executes checks without process or network isolation. There is no silent fallback.
 
+## Background service (Linux systemd)
+
+```bash
+opendots service install
+opendots service start
+opendots                 # open the terminal client
+opendots service status
+opendots service stop
+```
+
+The service runs under your user account. Set up and diagnose the configuration
+first. User services normally follow your login session; configure user lingering
+with your system administrator if agents must run after logout. No system-wide
+service or sudo action is performed by these commands.
+
 ## Terminal interface
 
 Keep `opendots serve` running, then open another terminal and run `opendots`
