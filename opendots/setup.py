@@ -49,17 +49,23 @@ def diagnose(config_path):
     config = load_config(config_path)
     add('configuration', True, str(config_path.resolve()))
     add('git', bool(shutil.which('git')), shutil.which('git') or 'Install Git')
-    if config.backend == 'codex' or any(t.agent == 'codex' for t in config.targets):
-        command = shutil.which(config.codex_command)
-        add('codex', bool(command), command or 'Install Codex CLI')
+    for provider, executable, login_args, profile in (
+            ('codex', config.codex_command, ['login','status'], config.planner_home),
+            ('claude', config.claude_command, ['auth','status'], config.claude_home)):
+        if config.backend != provider and not any(t.agent == provider for t in config.targets):
+            continue
+        command = shutil.which(executable)
+        add(provider, bool(command), command or f'Install {provider} CLI')
         if command:
             try:
-                from .agents import CodexAgent
-                environment=CodexAgent(planner_env=config.planner_env, planner_home=config.planner_home).environment()
-                result = subprocess.run([command,'login','status'], capture_output=True, timeout=10, env=environment)
-                add('codex_authentication', result.returncode == 0, 'Authenticated' if result.returncode == 0 else 'Run codex login')
+                from .agents import CodexAgent, ClaudeAgent
+                adapter = ClaudeAgent if provider == 'claude' else CodexAgent
+                environment=adapter(planner_env=config.planner_env, planner_home=profile).environment()
+                result = subprocess.run([command,*login_args], capture_output=True, timeout=10, env=environment)
+                login = 'claude auth login' if provider == 'claude' else 'codex login'
+                add(provider+'_authentication', result.returncode == 0, 'Authenticated' if result.returncode == 0 else 'Run '+login)
             except (OSError, subprocess.TimeoutExpired):
-                add('codex_authentication', False, 'Authentication probe failed or timed out')
+                add(provider+'_authentication', False, 'Authentication probe failed or timed out')
     if config.sandbox == 'bubblewrap':
         from .sandbox import sandbox_command
         try:

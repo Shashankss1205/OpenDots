@@ -33,7 +33,7 @@ class Workspaces:
         before = workspace_fingerprint(source)
         repository.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, repository, symlinks=True,
-                        ignore=shutil.ignore_patterns(".git", ".env*", ".aws", ".ssh", ".codex", "__pycache__", "node_modules", ".venv", "venv", ".opendots", ".spots"))
+                        ignore=shutil.ignore_patterns(".git", ".env*", ".aws", ".ssh", ".codex", ".claude", ".claude.json", ".mcp.json", "__pycache__", "node_modules", ".venv", "venv", ".opendots", ".spots"))
         if workspace_fingerprint(source) != before:
             raise ValueError("Source changed during snapshot; stop source edits and retry")
         git(repository, "init", f"--initial-branch={branch}")

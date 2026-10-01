@@ -47,6 +47,8 @@ class Config:
     planner_env: tuple[str, ...] = ()
     planner_home: str | None = None
     max_model_calls_per_day: int = 1000
+    claude_command: str = "claude"
+    claude_home: str | None = None
 
 
 def validate_config(raw):
@@ -63,6 +65,10 @@ def validate_config(raw):
         raise ValueError("planner_env must name explicitly allowed environment variables")
     if raw.get("planner_home") is not None and not isinstance(raw["planner_home"],str):
         raise ValueError("planner_home must be a path string")
+    if not isinstance(raw.get("claude_command", "claude"), str) or not raw.get("claude_command", "claude"):
+        raise ValueError("claude_command must be a nonempty executable name or path")
+    if raw.get("claude_home") is not None and not isinstance(raw["claude_home"], str):
+        raise ValueError("claude_home must be a path string")
     limits=raw.get("context_limits",{})
     if not isinstance(limits,dict):
         raise ValueError("context_limits must be an object")
@@ -202,4 +208,5 @@ def load_config(path: Path) -> Config:
                   tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)), int(raw.get("max_repair_attempts", 2)), int(raw.get("source_workers", 4)), tuple(raw.get("plugins", [])), int(raw.get("max_queued_per_target",1000)),
                   int(raw.get("max_events_per_minute",1000)), int(raw.get("priority_aging_seconds",60)), raw.get("context_limits",{}), tuple(raw.get("planner_env",[])),
                   str((base/raw["planner_home"]).resolve()) if raw.get("planner_home") else None,
-                  int(raw.get("max_model_calls_per_day",1000)))
+                  int(raw.get("max_model_calls_per_day",1000)), raw.get("claude_command", "claude"),
+                  str((base/raw["claude_home"]).resolve()) if raw.get("claude_home") else None)
