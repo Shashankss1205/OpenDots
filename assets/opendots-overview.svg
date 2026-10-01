@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="810" viewBox="0 0 960 810" role="img" aria-labelledby="title desc">
+<title id="title">How OpenDots turns a goal into reviewable work</title>
+<desc id="desc">You set a goal and rules. A heartbeat, prompt, or connected event triggers work. OpenDots asks Claude Code or Codex to plan using the goal, code snapshot, and saved notes. OpenDots checks permissions, requests approval when needed, executes allowed actions and checks, and saves a proposal. You review it and may accept its commit as the base for future work.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#627492"/></marker></defs>
+<rect width="960" height="810" rx="22" fill="#f5f8ff"/>
+<g font-family="DejaVu Sans,Arial,sans-serif">
+<text x="40" y="54" font-size="30" font-weight="700" fill="#152841">OpenDots</text>
+<text x="40" y="87" font-size="20" fill="#50647e">One goal. Repeated check-ins. Work you can review.</text>
+<rect x="40" y="116" width="410" height="100" rx="12" fill="#fff" stroke="#cbd8ee"/>
+<text x="62" y="150" font-size="21" font-weight="700" fill="#152841">You set the goal and rules</text>
+<text x="62" y="182" font-size="17" fill="#50647e">Project, allowed files, checks, approvals</text>
+<rect x="510" y="116" width="410" height="100" rx="12" fill="#fff" stroke="#cbd8ee"/>
+<text x="532" y="150" font-size="21" font-weight="700" fill="#152841">Something starts a task</text>
+<text x="532" y="182" font-size="17" fill="#50647e">Heartbeat, your prompt, or a new event</text>
+<g stroke="#627492" fill="none" stroke-width="2.5" marker-end="url(#arrow)"><path d="M245 216 V258 H380 V278"/><path d="M715 216 V258 H580 V278"/></g>
+<rect x="40" y="283" width="880" height="303" rx="16" fill="#e8efff" stroke="#bbcbee"/>
+<text x="62" y="316" font-size="14" font-weight="700" letter-spacing="1.2" fill="#385b95">OPENDOTS RUNTIME · RUNNING ON YOUR MACHINE</text>
+<rect x="62" y="338" width="535" height="96" rx="10" fill="#174dd8"/>
+<text x="84" y="373" font-size="21" font-weight="700" fill="#fff">Claude Code or Codex plans the next step</text>
+<text x="84" y="407" font-size="17" fill="#e4ecff">Uses your goal, code, current event, and notes</text>
+<rect x="647" y="338" width="250" height="216" rx="10" fill="#fff" stroke="#bbcbee"/>
+<text x="667" y="374" font-size="21" font-weight="700" fill="#152841">Saved progress</text>
+<text x="667" y="409" font-size="17" fill="#50647e">Task history</text><text x="667" y="437" font-size="17" fill="#50647e">Notes and results</text><text x="667" y="465" font-size="17" fill="#50647e">Retained proposals</text>
+<text x="667" y="522" font-size="15" fill="#385b95">Persists across restarts</text>
+<g stroke="#627492" fill="none" stroke-width="2.5" marker-end="url(#arrow)"><path d="M330 434 V458"/><path d="M647 387 H601"/><path d="M597 506 H643"/></g>
+<rect x="62" y="462" width="535" height="92" rx="10" fill="#fff" stroke="#bbcbee"/>
+<text x="84" y="496" font-size="21" font-weight="700" fill="#152841">OpenDots carries out allowed actions</text>
+<text x="84" y="528" font-size="17" fill="#50647e">Checks rules · asks when required · runs checks</text>
+<path d="M330 554 V619" stroke="#627492" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="62" y="625" width="535" height="117" rx="12" fill="#fff" stroke="#bbcbee"/>
+<text x="84" y="660" font-size="21" font-weight="700" fill="#152841">You review the result</text>
+<text x="84" y="692" font-size="17" fill="#50647e">Inspect the patch and check evidence.</text>
+<text x="84" y="720" font-size="17" fill="#50647e">Accept its commit to build on it in later tasks.</text>
+<path d="M597 687 H936 V260 H887 V278" stroke="#627492" stroke-width="2.5" fill="none" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<text x="631" y="656" font-size="17" font-weight="700" fill="#385b95">Next task</text><text x="631" y="683" font-size="16" fill="#50647e">uses the accepted base</text>
+<text x="40" y="782" font-size="16" fill="#50647e">AI access comes from your provider account. Changes stay local until you apply or publish them.</text>
+</g></svg>
