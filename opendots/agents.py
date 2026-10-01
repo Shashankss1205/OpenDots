@@ -1,5 +1,7 @@
 from copy import deepcopy
 import json
+import os
+import fnmatch
 from pathlib import Path
 import shutil
 import tempfile
@@ -81,10 +83,48 @@ class DemoAgent:
         return plan
 
 
+def workspace_snapshot(root, limits=None):
+    limits = limits or {}
+    budget = limits.get("max_bytes",128000)
+    maximum = limits.get("max_files",1000)
+    per_file = limits.get("max_file_bytes",32000)
+    excludes = limits.get("exclude",["node_modules",".venv","venv","__pycache__"])
+    inventory=[];visited=0;used=2
+    for directory, subdirs, files in os.walk(root, followlinks=False):
+        visited += 1
+        if visited > maximum:
+            return inventory, True
+        base = Path(directory)
+        subdirs[:] = sorted(name for name in subdirs if not name.startswith(".")
+            and not (base/name).is_symlink() and not any(fnmatch.fnmatchcase((base/name).relative_to(root).as_posix(),pattern) for pattern in excludes))
+        for name in sorted(files):
+            if name.startswith("."):
+                continue
+            relative=(base/name).relative_to(root).as_posix()
+            if any(fnmatch.fnmatchcase(relative,pattern) for pattern in excludes):
+                continue
+            if len(inventory)>=maximum:
+                return inventory,True
+            entry={"path":relative,"content_omitted":True}
+            try:
+                path=confined_path(root,relative)
+                if path.is_file() and path.stat().st_size <= min(per_file,budget-used):
+                    content=path.read_text()
+                    entry={"path":relative,"content":content,"sha256":digest(content)}
+            except (ValueError,UnicodeDecodeError,OSError):
+                continue
+            size=len(json.dumps(entry).encode())+2
+            if used+size>budget:
+                return inventory,True
+            inventory.append(entry);used+=size
+    return inventory,False
+
+
 class CodexAgent:
-    def __init__(self, command="codex", model=None, timeout=180, registry=None):
+    def __init__(self, command="codex", model=None, timeout=180, registry=None, context_limits=None):
         self.command, self.model, self.timeout = command, model, timeout
         self.registry = registry or ToolRegistry()
+        self.context_limits = context_limits or {}
 
     def plan(self, target, event, state):
         command_path = shutil.which(self.command)
@@ -104,23 +144,7 @@ class CodexAgent:
         context["write_paths"] = target.write_paths
         context["required_checks"] = target.required_checks
         # Bounded read-only context avoids assuming that an application tool is a native Codex tool.
-        inventory = []
-        remaining = 128_000
-        for path in sorted(target.workspace.rglob("*")):
-            relative = path.relative_to(target.workspace).as_posix()
-            if not path.is_file() or any(part.startswith(".") for part in Path(relative).parts):
-                continue
-            try:
-                path = confined_path(target.workspace, relative)
-                if path.stat().st_size > remaining or path.stat().st_size > 32_000:
-                    inventory.append({"path": relative, "content_omitted": True})
-                    continue
-                text = path.read_text()
-            except (ValueError, UnicodeDecodeError):
-                continue
-            remaining -= len(text.encode())
-            inventory.append({"path": relative, "content": text, "sha256": digest(text)})
-        context["workspace_snapshot"] = inventory
+        context["workspace_snapshot"], context["snapshot_truncated"] = workspace_snapshot(target.workspace, self.context_limits)
         prompt = (
             "You are the planning backend for OpenDots. Investigate this target workspace in read-only mode. "
             "Return a JSON plan matching the schema. Do not modify files or perform external actions. "
