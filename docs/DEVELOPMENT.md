@@ -115,3 +115,13 @@ requires an explicit `"*"`. `protected_paths` defaults to check.py, tests/** and
 .github/** and takes precedence over write scopes; configured skills are also
 protected. Owners can customize protected paths, and should include every local
 validation harness they rely on as independent evidence.
+
+## Planner environment boundary
+
+The planner receives only PATH, HOME, locale/temp platform variables and names
+explicitly listed in `planner_env`. Runtime GitHub/webhook credentials are not
+forwarded by default. `planner_home` selects a dedicated CODEX_HOME profile;
+authenticate that profile separately and review its configuration. `doctor`
+checks the same environment. The planner still uses Codex read-only sandboxing;
+this is not an attestation of arbitrary CLI hooks, network behavior or plugins.
+Use a dedicated OS account/container when a stronger planner boundary is needed.

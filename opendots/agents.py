@@ -121,10 +121,18 @@ def workspace_snapshot(root, limits=None):
 
 
 class CodexAgent:
-    def __init__(self, command="codex", model=None, timeout=180, registry=None, context_limits=None):
+    def __init__(self, command="codex", model=None, timeout=180, registry=None, context_limits=None, planner_env=(), planner_home=None):
         self.command, self.model, self.timeout = command, model, timeout
         self.registry = registry or ToolRegistry()
         self.context_limits = context_limits or {}
+        self.planner_env, self.planner_home = planner_env, planner_home
+
+    def environment(self):
+        allowed = {"PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT", *self.planner_env}
+        environment = {key:value for key,value in os.environ.items() if key in allowed}
+        if self.planner_home:
+            environment["CODEX_HOME"] = self.planner_home
+        return environment
 
     def plan(self, target, event, state):
         command_path = shutil.which(self.command)
@@ -178,7 +186,7 @@ class CodexAgent:
             if self.model:
                 argv += ["--model", self.model]
             argv += ["-"]
-            code, _ = bounded_process(argv, target.workspace, self.timeout, prompt)
+            code, _ = bounded_process(argv, target.workspace, self.timeout, prompt, env=self.environment())
             if code != 0:
                 # CLI logs may include sensitive information; do not persist them in the public timeline.
                 raise RuntimeError(f"Codex planning failed with exit code {code}; check CLI authentication/configuration locally")
