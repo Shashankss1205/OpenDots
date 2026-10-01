@@ -37,6 +37,9 @@ def main():
     pause.add_argument("target_id")
     resume = commands.add_parser("resume")
     resume.add_argument("target_id")
+    retry = commands.add_parser("retry", help="Replan failed work after inspecting effects")
+    retry.add_argument("work_id", type=int)
+    retry.add_argument("--inspected", action="store_true")
     cancel = commands.add_parser("cancel")
     cancel.add_argument("work_id", type=int)
     decide = commands.add_parser("decide")
@@ -79,6 +82,8 @@ def main():
             print(json.dumps({"counts": result["counts"], "work": result["work"]}, indent=2))
         elif args.command in {"pause", "resume"}:
             print(json.dumps(engine.store.pause(args.target_id, args.command == "pause")))
+        elif args.command == "retry":
+            print(json.dumps(engine.retry(args.work_id,args.inspected)))
         elif args.command == "cancel":
             print(json.dumps(engine.store.cancel(args.work_id)))
         elif args.command == "decide":
