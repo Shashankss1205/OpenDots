@@ -66,3 +66,16 @@ class AuditFixTests(unittest.TestCase):
             self.assertGreater(patch.stat().st_size, 65536)
             subprocess.run(['git','apply',str(patch)],cwd=source,check=True,capture_output=True)
             self.assertEqual((source/'a.txt').read_text(), content)
+
+    def test_pending_approval_survives_history_window(self):
+        from opendots.config import Config
+        from opendots.engine import Engine
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); source=root/'source'; source.mkdir()
+            target=Target('t','T','Test',source,({'types':['test']},),{'note':'approval'})
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            engine.ingest({'id':'first','type':'test'});engine.drain()
+            for n in range(205): engine.ingest({'id':str(n),'type':'test'})
+            state=engine.snapshot()
+            self.assertEqual(sum(w['status']=='waiting_approval' for w in state['work']),1)
+            self.assertTrue(any(a['kind']=='approval_requested' for a in state['audit']))
