@@ -89,3 +89,14 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(event['payload']['issue_body'],'issue')
         self.assertEqual(event['payload']['number'],7)
         self.assertEqual(event['payload']['actor'],'owner')
+
+    def test_desired_state_reconciles_on_restart(self):
+        from dataclasses import replace
+        from opendots.store import Store
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);store=Store(root/'state.db')
+            target=Target('t','T','Test',root,(),{},desired_state={'goal':'old'})
+            store.register_targets((target,));old=store.state('t')['config_revision']
+            store.register_targets((replace(target,desired_state={'goal':'new'}),))
+            self.assertEqual(store.state('t')['desired_state'],{'goal':'new'})
+            self.assertNotEqual(store.state('t')['config_revision'],old)
