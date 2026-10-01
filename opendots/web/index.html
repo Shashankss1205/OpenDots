@@ -1,21 +1,62 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenDots · Mission control</title><link rel="icon" type="image/png" href="/opendots-logo.png"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>OpenDots · Your agents, at work</title>
+  <link rel="icon" type="image/png" href="/opendots-logo.png">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
 <body>
-<aside><a class="brand" href="/"><img class="brand-logo" src="/opendots-logo.png" alt="" width="34" height="34">OpenDots</a><span class="version">LOCAL AGENT RUNTIME</span><nav><a href="#overview" class="selected">◈ &nbsp; Mission control</a><a href="#targets">◎ &nbsp; Persistent targets</a><a href="#listeners">Event listeners</a><a href="#event-stream">Received events</a><a href="#providers">Models</a><a href="#plugins">Plugins</a><a href="#notifications">Notifications</a><a href="#approvals">◇ &nbsp; Action review</a><a href="#timeline">↗ &nbsp; Activity timeline</a></nav><div class="sidebar-bottom"><span class="live-dot"></span><span id="connection">Connecting</span><p>Goals persist.<br>Events move them forward.</p></div></aside>
-<main id="overview"><header><div class="eyebrow">YOUR AGENTS, AT WORK</div><div class="header-row"><div><h1>While you were away<span>.</span></h1><p class="subtitle">A live view of your targets, decisions, and local actions.</p></div><button id="sample" class="primary" hidden>↗ &nbsp; Run five-event demo</button></div><div class="notice"><span id="backend">Loading backend</span><span>Actions follow each target's policy</span></div></header>
-<div id="error" role="alert" hidden></div>
-<section class="stats" aria-label="System statistics"><div><small>EVENTS RECEIVED</small><strong id="events">0</strong><span>Persistent global stream</span></div><div><small>ACTIVE TARGETS</small><strong id="target-count">0</strong><span>Configured without a count limit</span></div><div><small>WORK COMPLETED</small><strong id="completed">0</strong><span>Actions and state recorded</span></div><div><small>AWAITING REVIEW</small><strong id="waiting">0</strong><span>Concrete actions, your decision</span></div></section>
-<section id="targets"><div class="section-heading"><h2>Persistent targets</h2><span id="worker-count" class="muted"></span></div><div id="target-grid" class="target-grid"></div></section>
+<a class="skip-link" href="#overview">Skip to workspace</a>
+<aside class="sidebar" aria-label="Workspace navigation">
+  <a class="brand" href="#overview"><img class="brand-logo" src="/opendots-logo.png" alt="" width="36" height="36">OpenDots</a>
+  <span class="version">YOUR LOCAL WORKSPACE</span>
+  <nav aria-label="Main navigation">
+<a href="#overview" class="selected" aria-current="location"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg><span>Overview</span></a>
+<a href="#targets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 2 M8 3h8 M12 3v2 M5 8l-2-2 M19 8l2-2 M20 14a8 8 0 1 1-16 0 8 8 0 0 1 16 0"/></svg><span>Agents</span></a>
+<a href="#event-stream"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 10-12h-7z"/></svg><span>Events</span></a>
+<a href="#approvals"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H5v18h14V3h-4 M9 2h6v4H9z m-1 12 3 3 5-6"/></svg><span>Reviews</span></a>
+<a href="#timeline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10 M10 20V4 M16 20v-7 M22 20V7"/></svg><span>Activity</span></a>
+<span class="nav-label">CONNECTIONS</span>
+<a href="#listeners"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16 M4 16h16 M8 4v8 M16 12v8"/></svg><span>Event sources</span></a>
+<a href="#providers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 10h1 M15 10h1 M8 14h8 M12 2v4"/></svg><span>Models</span></a>
+<a href="#plugins"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8v5h5v8h-5v5H8v-5H3V8h5z"/></svg><span>Plugins</span></a>
+<a href="#notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17h14l-2-3V9a5 5 0 0 0-10 0v5z M10 21h4"/></svg><span>Notifications</span></a>
+  </nav>
+  <div class="sidebar-bottom"><div class="connection-state"><span class="live-dot"></span><span id="connection" role="status">Connecting</span></div><p>Your goals stay in motion.<br>You stay in control.</p></div>
+</aside>
+<main id="overview" tabindex="-1">
+  <div class="workspace-bar"><span>Workspace <span class="bar-divider">/</span> <b>Overview</b></span><a class="text-link" href="#compose">+ Send an event</a></div>
+  <header>
+    <div class="eyebrow">YOUR AGENTS, AT WORK</div>
+    <div class="header-row"><div><h1>Your goals. <span>Always moving.</span></h1><p class="subtitle">Follow the signals. Review the work. Decide what happens next.</p></div><button id="sample" class="primary" hidden>Run five-event demo</button></div>
+    <div class="notice"><span id="backend">Loading backend</span><span>Actions follow your configured policies</span></div>
+  </header>
+  <div id="error" role="alert" hidden></div>
+  <section class="stats" aria-label="System statistics">
+    <div><small>EVENTS RECEIVED</small><strong id="events">—</strong><span>Signals in your workspace</span></div>
+    <div><small>CONFIGURED AGENTS</small><strong id="target-count">—</strong><span>Persistent goals to pursue</span></div>
+    <div><small>WORK COMPLETED</small><strong id="completed">—</strong><span>Results ready to inspect</span></div>
+    <div class="review-stat"><small>AWAITING REVIEW</small><strong id="waiting">—</strong><span>Your next decisions</span></div>
+  </section>
+<section id="targets"><div class="section-heading"><h2>Your agents</h2><span id="worker-count" class="muted"></span></div><div id="target-grid" class="target-grid"></div></section>
+<section id="approvals"><div class="section-heading"><h2>Review proposed actions</h2><span class="muted">Your permission, for this exact action</span></div><div id="review-list"></div></section>
+<section id="workflows"><div class="section-heading"><h2>Work in motion</h2><span class="muted">Progress and evidence from the live runtime</span></div><div id="workflow-list" class="workflow-list"></div></section>
+<section id="event-stream"><div class="section-heading"><h2>Received events</h2><span class="muted">Including filtered and irrelevant events</span></div><form id="event-search-form" class="event-search"><label>Search event type, source, ID, or content<input id="event-search" placeholder="All received events"></label><button type="submit" class="reject">Search</button><button id="event-live" type="button" class="reject">Latest</button></form><p class="event-help">Confidence is the model's estimate for its label, not a calibrated probability. Filtered or unassessed events have no score. Low confidence blocks task actions.</p><div id="received-list"></div><button id="events-older" class="reject" type="button" hidden>Older events</button></section>
+<div class="columns"><section id="timeline"><div class="section-heading"><h2>Activity timeline</h2><span class="live-label"><span class="live-dot"></span>LIVE</span></div><div id="audit" class="timeline"></div></section><section id="compose"><div class="section-heading"><h2>Send an event</h2><span class="muted">Local input</span></div><form id="event-form"><label>Target<select id="event-target" required></select></label><label>Event type<input id="event-type" value="owner.request" required></label><label>Repository (owner/name)<input id="event-repo" placeholder="owner/repository"></label><label>Source<input id="event-source" value="local" required></label><label>Title<input id="event-title" placeholder="What happened?" required></label><label>Event ID (optional; reuse for delivery retries)<input id="event-id" placeholder="Unique producer delivery ID"></label><label>Additional payload (JSON object)<textarea id="event-payload" rows="5" spellcheck="false">{}</textarea></label><label>Priority <span class="muted">0–100</span><input id="event-priority" type="number" min="0" max="100" value="80" required></label><button id="preview-event" class="reject" type="button">Preview JSON</button><pre id="event-preview" hidden></pre><button class="secondary" type="submit">Send event</button></form><p id="event-result" role="status"></p><p class="form-note">Subscription rules still apply. Edit your configuration to add targets, subscriptions, tools, or schedules.</p><div class="queue-heading">RECENT WORK</div><div id="queue"></div></section></div>
+
+<div class="integration-heading"><div class="eyebrow">MAKE IT YOURS</div><h2>Connected to your workflow</h2><p>Inspect the sources, models and plugins behind your agents.</p></div>
 <section id="listeners"><div class="section-heading"><h2>What is listening?</h2><span class="muted">Configuration currently in effect</span></div><p class="event-help">Sources collect information. Subscriptions route it to an agent. Matching events are assessed against the goal when model relevance is enabled.</p><div id="listener-list"></div><details class="connection-guide"><summary>Connect a source or create your own event</summary><p>An event is a JSON object with a type, source, and payload. You choose names such as <code>input.build_failed</code>; there is no fixed list of custom event types.</p><p>Use the form below for a local message, or send the same JSON to <code>POST /api/events</code> with <code>Content-Type: application/json</code> and <code>X-OpenDots-Request: dashboard</code>.</p><p><strong>JSONL:</strong> add a <code>jsonl</code> source with an inbox path, then append one JSON event per line. <strong>GitHub polling:</strong> add a <code>github_poll</code> source with a repository. <strong>Heartbeats:</strong> add a schedule. Each needs a matching target subscription. Restart after config edits.</p><p>GitHub webhooks need a signing secret and a receiver that forwards to this local runtime. Kafka, Redis, Slack, and email need an external bridge or a trusted source plugin.</p><a href="https://github.com/Shashankss1205/OpenDots/blob/main/docs/EVENTS.md" target="_blank" rel="noreferrer">Step-by-step source configuration and producer examples</a></details></section>
-<section id="notifications"><div class="section-heading"><h2>Notifications</h2><span class="muted">Destination and delivery status</span></div><div id="notification-list"></div></section>
 <section id="providers"><div class="section-heading"><h2>Model providers</h2><span class="muted">Profiles and target assignments</span></div><div id="provider-list"></div></section>
 <section id="plugins"><div class="section-heading"><h2>Loaded plugins</h2><span class="muted">Capabilities available to this runtime</span></div><p class="event-help">A loaded plugin makes capabilities available. Configure a source to connect it; inspect its connection status above.</p><div id="plugin-list"></div></section>
-<section id="event-stream"><div class="section-heading"><h2>Received events</h2><span class="muted">Including filtered and irrelevant events</span></div><form id="event-search-form" class="event-search"><label>Search event type, source, ID, or content<input id="event-search" placeholder="All received events"></label><button type="submit" class="reject">Search</button><button id="event-live" type="button" class="reject">Latest</button></form><p class="event-help">Confidence is the model's estimate for its label, not a calibrated probability. Filtered or unassessed events have no score. Low confidence blocks task actions.</p><div id="received-list"></div><button id="events-older" class="reject" type="button" hidden>Older events</button></section>
-<section id="workflows"><div class="section-heading"><h2>From signal to verified work</h2><span class="muted">Progress and evidence from the live runtime</span></div><div id="workflow-list" class="workflow-list"></div></section>
-<section id="approvals"><div class="section-heading"><h2>Action review</h2><span class="muted">A target waits; other targets continue</span></div><div id="review-list"></div></section>
-<div class="columns"><section id="timeline"><div class="section-heading"><h2>Activity timeline</h2><span class="live-label"><span class="live-dot"></span>LIVE</span></div><div id="audit" class="timeline"></div></section><section><div class="section-heading"><h2>Send an event</h2><span class="muted">Local input</span></div><form id="event-form"><label>Target<select id="event-target" required></select></label><label>Event type<input id="event-type" value="owner.request" required></label><label>Repository (owner/name)<input id="event-repo" placeholder="owner/repository"></label><label>Source<input id="event-source" value="local" required></label><label>Title<input id="event-title" placeholder="What happened?" required></label><label>Event ID (optional; reuse for delivery retries)<input id="event-id" placeholder="Unique producer delivery ID"></label><label>Additional payload (JSON object)<textarea id="event-payload" rows="5" spellcheck="false">{}</textarea></label><label>Priority <span class="muted">0–100</span><input id="event-priority" type="number" min="0" max="100" value="80" required></label><button id="preview-event" class="reject" type="button">Preview JSON</button><pre id="event-preview" hidden></pre><button class="secondary" type="submit">Send event</button></form><p id="event-result" role="status"></p><p class="form-note">Subscription rules still apply. Edit your configuration to add targets, subscriptions, tools, or schedules.</p><div class="queue-heading">RECENT WORK</div><div id="queue"></div></section></div>
-<footer>OpenDots · Event-driven, target-centric agents <span>Persistent queues / isolated task workspaces</span></footer></main>
+<section id="notifications"><div class="section-heading"><h2>Notifications</h2><span class="muted">Destination and delivery status</span></div><div id="notification-list"></div></section>
+<footer><span>OpenDots <span class="footer-dot">·</span> Open source. Your models. Your control.</span><a href="#overview">Back to overview ↑</a></footer>
+</main>
 <dialog id="event-dialog"><div class="dialog-top"><h2>Event and relevance decisions</h2><button id="close-event" class="reject" type="button">Close</button></div><pre id="event-detail"></pre></dialog>
 <dialog id="evidence-dialog"><div class="dialog-top"><div><div class="eyebrow">RETAINED LOCAL CHANGE</div><h2 id="patch-title">Patch evidence</h2></div><button id="close-evidence" class="reject" type="button">Close</button></div><p id="patch-branch" class="muted"></p><pre id="patch-content"></pre></dialog>
-</body></html>
+
+</body>
+</html>
