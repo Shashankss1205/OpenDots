@@ -84,4 +84,6 @@ jobs:
           python -m pip install playwright
           python -m playwright install --with-deps chromium
       - name: Exercise event controls against a real local runtime
-        run: python scripts/check_event_ui.py
+        run: |
+          python scripts/check_event_ui.py
+          python scripts/check_dashboard_ui.py

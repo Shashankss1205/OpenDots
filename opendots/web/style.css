@@ -208,3 +208,44 @@ dialog::backdrop { background: #09212fb0; backdrop-filter: blur(5px); }
   .dialog-top { align-items: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* Selected goal and exact-action review, backed by the runtime snapshot. */
+.goal-workspace { border: 1px solid #d7e5e2; border-radius: 16px; background: linear-gradient(135deg, #eef9f5, #f9fbfa 65%); padding: 25px; margin: 26px 0 34px; }
+.goal-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+.goal-heading > div { min-width: 0; }
+.goal-heading h2 { margin-top: 10px; font-size: clamp(20px, 2vw, 28px); line-height: 1.3; letter-spacing: -.8px; overflow-wrap: anywhere; }
+.goal-heading p { margin-bottom: 0; }
+.goal-picker { width: 220px; flex-shrink: 0; margin-bottom: 0; font-size: 10px; color: var(--muted); }
+.goal-picker select { background: white; font-size: 12px; }
+.focus-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); gap: 18px; }
+.focus-context { display: grid; align-content: start; gap: 18px; min-width: 0; }
+.focus-card { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 21px; background: white; box-shadow: 0 5px 15px #0b253304; }
+.focus-card h3 { font-size: 14px; letter-spacing: -.2px; margin: 0; }
+.focus-card h4 { font-size: 16px; line-height: 1.5; margin: 12px 0 8px; overflow-wrap: anywhere; }
+.focus-card .text-link { font-size: 10px; }
+.focus-card .section-heading { gap: 10px; flex-wrap: wrap; }
+.empty-copy { font-size: 12px; color: var(--muted); line-height: 1.8; margin: 12px 0; }
+.focus-activity-row { display: grid; grid-template-columns: 23px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 11px 0; border-bottom: 1px solid #edf1f1; font-size: 12px; overflow-wrap: anywhere; }
+.focus-activity-row:last-child { border: 0; }
+.activity-marker { display: grid; place-items: center; border-radius: 50%; width: 23px; height: 23px; color: var(--mint); background: var(--mint-soft); }
+.review-clear-icon { display: grid; place-items: center; width: 42px; height: 42px; margin-top: 30px; border-radius: 12px; background: var(--mint-soft); color: var(--mint); font-size: 22px; }
+.review-card.compact { padding: 0; border: 0; background: transparent; margin-bottom: 0; }
+.compact .review-top h3 { font-size: 11px; color: var(--muted); font-weight: 550; }
+.compact .review-top { align-items: center; gap: 8px; flex-wrap: wrap; }
+.review-card .review-policy { color: #775d25; border-radius: 6px; background: #fff5df; padding: 10px 12px; font-size: 11px; }
+.review-actions { display: flex; gap: 9px; }
+.review-actions .approve { flex: 1; }
+.review-branch { font-family: ui-monospace, monospace; font-size: 10px !important; }
+.review-card .review-diff { padding: 10px 0; background: #fbfdfc; border-color: var(--line); }
+.compact .review-diff { max-height: 220px; font-size: 11px; }
+.diff-line { display: block; padding: 0 12px; min-height: 1.8em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-add { background: #e3f5eb; color: #155c3c; }
+.diff-remove { background: #fcece9; color: #943d35; }
+.diff-heading { background: #edf2f5; color: #4a667a; }
+.journey { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; list-style: none; padding: 18px 0 0; margin: 0; }
+.journey li { display: flex; align-items: center; gap: 9px; color: #45645e; font-size: 11px; line-height: 1.5; }
+.journey li span { font-size: 9px; font-weight: 700; color: #197760; border: 1px solid #d0e9df; background: #f7fdfa; border-radius: 50%; width: 26px; height: 26px; display: grid; place-items: center; flex-shrink: 0; }
+#error { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#connection-warning { padding: 14px; border: 1px solid #e8d6ac; border-radius: 8px; background: #fff6e0; color: #775d25; margin-top: 18px; font-size: 12px; line-height: 1.7; }
+@media (max-width: 1150px) { .goal-picker { width: 180px; } .focus-grid { grid-template-columns: minmax(0, 1fr); } .focus-context { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 780px) { .goal-workspace { padding: 17px; } .goal-heading { display: block; } .goal-picker { width: 100%; margin-top: 17px; } .focus-context { grid-template-columns: minmax(0, 1fr); } .focus-card { padding: 17px; } .journey { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 9px; } .journey li { font-size: 10px; } }
