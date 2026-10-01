@@ -319,3 +319,12 @@ class AuditFixTests(unittest.TestCase):
         self.assertIn('100%%',text);self.assertIn("'/tmp/python path/python'",text)
         self.assertIn('UMask=0077',text)
         with self.assertRaises(ValueError):unit_text('/tmp/bad\nconfig')
+
+    def test_planning_budgets_are_durable_and_global(self):
+        from opendots.store import Store,BudgetExceeded
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'state.db';store=Store(path)
+            store.reserve_model_call('a',1,2)
+            with self.assertRaises(BudgetExceeded):Store(path).reserve_model_call('a',1,2)
+            store.reserve_model_call('b',10,2)
+            with self.assertRaises(BudgetExceeded):store.reserve_model_call('c',10,2)

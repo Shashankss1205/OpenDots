@@ -7,6 +7,10 @@ import sqlite3
 import time
 
 
+class BudgetExceeded(RuntimeError):
+    pass
+
+
 class CapacityError(RuntimeError):
     pass
 
@@ -31,6 +35,7 @@ CREATE TABLE IF NOT EXISTS audit(
  target_id TEXT, work_id INTEGER, detail TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS schedule_ticks(id TEXT PRIMARY KEY, last_tick INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS source_state(id TEXT PRIMARY KEY, state TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS model_usage(day INTEGER NOT NULL,target_id TEXT NOT NULL,calls INTEGER NOT NULL,PRIMARY KEY(day,target_id));
 """
 
 
@@ -238,6 +243,17 @@ class Store:
                     state["actual_state"]["latest_proposal_commit"] = artifact["commit"]
                 db.execute("UPDATE targets SET state=? WHERE id=?", (json.dumps(state), work["target_id"]))
             self.log(db, "work_" + status, {"error": error, "summary": work.get("summary"), "artifact": artifact}, work["target_id"], work["id"])
+
+    def reserve_model_call(self, target_id, target_limit, global_limit):
+        day=int(time.time())//86400
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            total=db.execute("SELECT COALESCE(sum(calls),0) FROM model_usage WHERE day=?",(day,)).fetchone()[0]
+            row=db.execute("SELECT calls FROM model_usage WHERE day=? AND target_id=?",(day,target_id)).fetchone()
+            if total>=global_limit or (row and row[0]>=target_limit):
+                raise BudgetExceeded("Daily planning-call budget exhausted; review limits or retry on the next UTC day")
+            db.execute("INSERT INTO model_usage VALUES(?,?,1) ON CONFLICT(day,target_id) DO UPDATE SET calls=calls+1",(day,target_id))
+            self.log(db,"planner_call_reserved",{"day":day},target_id)
 
     def pause(self, target_id, paused):
         with self.connect() as db:

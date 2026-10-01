@@ -21,6 +21,7 @@ class Target:
     required_checks: tuple[str, ...] = ()
     success_conditions: tuple[dict, ...] = ()
     protected_paths: tuple[str, ...] = ("check.py", "tests/**", ".github/**")
+    model_calls_per_day: int = 100
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class Config:
     context_limits: dict = field(default_factory=dict)
     planner_env: tuple[str, ...] = ()
     planner_home: str | None = None
+    max_model_calls_per_day: int = 1000
 
 
 def validate_config(raw):
@@ -52,7 +54,7 @@ def validate_config(raw):
         raise ValueError("config.targets must be an array")
     for key, minimum in (("workers",1),("source_workers",1),("agent_timeout",1),
                          ("max_planning_rounds",1),("max_repair_attempts",0),("max_queued_per_target",1),
-                         ("max_events_per_minute",1),("priority_aging_seconds",1)):
+                         ("max_events_per_minute",1),("priority_aging_seconds",1),("max_model_calls_per_day",1)):
         if key in raw and (type(raw[key]) is not int or raw[key] < minimum):
             raise ValueError(f"config.{key} must be an integer >= {minimum}")
     if not isinstance(raw.get("plugins",[]),list) or any(not isinstance(v,str) or not v for v in raw.get("plugins",[])):
@@ -96,6 +98,8 @@ def validate_config(raw):
                 raise ValueError(f"{prefix}.success_conditions need a supported format and exactly one comparator")
             if "minimum" in condition and type(condition["minimum"]) not in (int,float):
                 raise ValueError(f"{prefix}.success_conditions.minimum must be numeric")
+        if type(target.get("model_calls_per_day",100)) is not int or target.get("model_calls_per_day",100)<1:
+            raise ValueError(f"{prefix}.model_calls_per_day must be positive")
         priority = target.get("minimum_priority",20)
         if type(priority) is not int or not 0 <= priority <= 100:
             raise ValueError(f"{prefix}.minimum_priority must be an integer from 0 to 100")
@@ -157,7 +161,7 @@ def load_config(path: Path) -> Config:
                               item.get("checks", {}), int(item.get("minimum_priority", 20)),
                               item.get("desired_state", {}), tuple(item.get("skills", [])), item.get("agent"),
                               tuple(item.get("write_paths", [])), tuple(required_checks), tuple(item.get("success_conditions", [])),
-                              tuple(item.get("protected_paths", ["check.py", "tests/**", ".github/**"]))))
+                              tuple(item.get("protected_paths", ["check.py", "tests/**", ".github/**"])), int(item.get("model_calls_per_day",100))))
     workers = int(raw.get("workers", 4))
     if workers < 1:
         raise ValueError("workers must be positive")
@@ -197,4 +201,5 @@ def load_config(path: Path) -> Config:
                   raw.get("codex_command", "codex"), raw.get("model"), tuple(schedules),
                   tuple(sources), sandbox, int(raw.get("max_planning_rounds", 8)), int(raw.get("max_repair_attempts", 2)), int(raw.get("source_workers", 4)), tuple(raw.get("plugins", [])), int(raw.get("max_queued_per_target",1000)),
                   int(raw.get("max_events_per_minute",1000)), int(raw.get("priority_aging_seconds",60)), raw.get("context_limits",{}), tuple(raw.get("planner_env",[])),
-                  str((base/raw["planner_home"]).resolve()) if raw.get("planner_home") else None)
+                  str((base/raw["planner_home"]).resolve()) if raw.get("planner_home") else None,
+                  int(raw.get("max_model_calls_per_day",1000)))
