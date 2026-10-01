@@ -45,3 +45,24 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(refreshed['status'], 'waiting_approval')
             self.assertNotEqual(refreshed['approval_token'], work['approval_token'])
             self.assertEqual(resumed.store.work_results(work['id']), [])
+
+    def test_large_retained_patch_applies_exactly(self):
+        import subprocess
+        from opendots.config import Config
+        from opendots.engine import Engine
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); source = root/'source'; source.mkdir()
+            (source/'a.txt').write_text('old\n')
+            target = Target('t','T','Test',source,({'types':['test']},),{'write_file':'auto'})
+            content = 'new line\n' * 15000
+            class Planner:
+                def plan(self,*args):
+                    return {'summary':'Edit','actions':[{'tool':'write_file','args':{
+                        'path':'a.txt','content':content,'expected_sha256':digest('old\n')}}]}
+            engine = Engine(Config((target,),root/'state.db',sandbox='trusted-local'),agent=Planner())
+            engine.ingest({'type':'test'}); engine.drain()
+            artifact = engine.store.state('t')['artifacts'][0]
+            patch = Path(artifact['patch'])
+            self.assertGreater(patch.stat().st_size, 65536)
+            subprocess.run(['git','apply',str(patch)],cwd=source,check=True,capture_output=True)
+            self.assertEqual((source/'a.txt').read_text(), content)
