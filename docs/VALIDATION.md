@@ -2,7 +2,29 @@
 
 Results distinguish current portable regression checks from historical real-agent acceptance. Repeated upstream runs are not additional unique OpenDots tests.
 
-## Current version 0.1.5
+## Current version 0.2.0 — October 1, 2026
+
+[CI run 36857834795](https://github.com/Shashankss1205/OpenDots/actions/runs/36857834795)
+validated the terminal and runtime changes through PR #39. Later packaging changes
+are independently checked by their PR and release workflows.
+
+| Check | Result | Boundary |
+| --- | --- | --- |
+| Bubblewrap regression suite | 85 tests passed, zero skips | Actual Ubuntu CI namespaces; isolation job logs verified |
+| Python 3.11, 3.12, 3.13 matrix | All jobs passed | Portable fixtures intentionally select trusted-local; two namespace-only skips per run |
+| Installed wheel | Fresh virtual environment: version/init/status passed | Outside checkout; packaged fixtures and commands |
+| Container lifecycle | CI passed | Image build, non-root UID, health, persisted config and restart |
+| Terminal interaction | PTY smoke passed | Rendering, Tab completion, help, exit and terminal restoration |
+| Terminal/runtime integration | Regression passed | Real HTTP approvals, history, proposal acceptance and cancellation |
+| Offline maintenance | Regression passed | Real SQLite/Git backup restore; corruption, overwrite and retention guards |
+
+The current host cannot create Bubblewrap namespaces; the separate CI isolation
+job establishes that coverage. No new successful live-model run was performed in
+this audit pass. Container checks do not establish nested sandbox or Codex
+execution; a live systemd user-manager run and prolonged soak are still outstanding.
+Historical results below remain historical and are not added to these counts.
+
+## Historical version 0.1.5
 
 | Check | Result | Boundary |
 | --- | --- | --- |

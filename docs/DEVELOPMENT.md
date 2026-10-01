@@ -2,13 +2,13 @@
 
 ## Setup
 
-Python 3.11+, Git and Linux bubblewrap are required for default isolated checks. The application has no third-party Python runtime dependencies. Run from the repository root to find the example configuration.
+Python 3.11+, Git and Linux bubblewrap are required for default isolated checks. The application has no third-party Python runtime dependencies. Use `opendots init` to create configuration from packaged templates, or select a repository config with `--config`.
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 python3 -m pip install -e .
-python3 -m opendots serve
+python3 -m opendots --config examples/config.json serve
 ```
 
 For real planning, provide an installed authenticated Codex CLI and set `backend` to `codex`. Optional `model`, `codex_command`, `agent_timeout` and target `agent` select behavior. Account access/limits apply. Provider errors do not switch silently to the deterministic planner.
@@ -57,7 +57,7 @@ OPENDOTS_TEST_SANDBOX=trusted-local python3 -m unittest discover -s tests -v
 python3 -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
 ```
 
-Use the relaxed test command only for explicitly trusted disposable fixtures without namespaces. Wheel building needs setuptools 68+. Wheels contain the package, dashboard and compatibility commands, but not example workspaces or external executables; installed CLI use requires an explicit external config.
+Use the relaxed test command only for explicitly trusted disposable fixtures without namespaces. Wheel building needs setuptools 77+. Wheels contain the package, dashboard, first-run templates, fixture workspaces and compatibility commands. Git, Bubblewrap and the optional Codex CLI remain external executables. `opendots init` creates the external config and sources.
 
 ## Deployment and extensions
 

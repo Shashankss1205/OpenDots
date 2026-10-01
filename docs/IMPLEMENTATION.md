@@ -1,6 +1,6 @@
 # Implementation details
 
-This document describes the code shipped in OpenDots 0.1.5. OpenDots is an independent local prototype inspired by the Dots idea. Its persistent unit is a **target** with an objective, workspace, subscriptions, desired state, and owner policy. Goal groupings used in acceptance runners are metadata, rather than a separate autonomous goal planner.
+This document describes the code shipped in OpenDots 0.2.0. OpenDots is an independent local prototype inspired by the Dots idea. Its persistent unit is a **target** with an objective, workspace, subscriptions, desired state, and owner policy. Goal groupings used in acceptance runners are metadata, rather than a separate autonomous goal planner.
 
 ## Source map
 
@@ -29,11 +29,11 @@ This document describes the code shipped in OpenDots 0.1.5. OpenDots is an indep
 
 ## Configuration and target ownership
 
-The CLI defaults to `examples/config.json`. Paths resolve relative to that file. Configuration defaults include four workers, the deterministic `demo` backend, a 180-second agent timeout, eight planning rounds, `codex` as the CLI executable, and `bubblewrap` for checks. The default database is `../.opendots/state.db`; if this default is absent and the legacy `../.spots/state.db` exists, the legacy database is reused. Explicit nondefault database paths are unchanged.
+The CLI uses `examples/config.json` when present in the current directory; otherwise it uses `$XDG_CONFIG_HOME/opendots/config.json` (default `~/.config/opendots/config.json`). `opendots init` creates configuration and packaged demo fixtures, or a read-only-by-default real target with `--workspace PATH`. Paths resolve relative to the selected config file. Configuration defaults include four workers, the deterministic `demo` backend, a 180-second agent timeout, eight planning rounds, `codex` as the CLI executable, and `bubblewrap` for checks. The default database is `../.opendots/state.db`; if this default is absent and the legacy `../.spots/state.db` exists, the legacy database is reused. Explicit nondefault database paths are unchanged.
 
 Each target has an ID, name, objective, source workspace, subscriptions, policy, named checks, minimum attention priority, desired state, skills, optional agent override, write scopes, and optional `required_checks`. Target IDs must be unique. Source workspaces must not overlap. Use separate source worktrees for independent targets concerning the same upstream project.
 
-A tool policy is `auto`, `ask`/`approval`, `draft`, or `deny`. Unspecified tools are denied. The default write scope is `*`; owners can narrow it using `write_paths`. Required-check names must refer to configured checks. Checks are argv arrays executed without a shell; `{python}` selects the interpreter. The owner controls executable commands and trusted skills.
+A tool policy is `auto`, `ask`/`approval`, `draft`, or `deny`. Unspecified tools are denied. Omitted `write_paths` in JSON permits no writes. Explicit globs grant access; `protected_paths` and configured skill files take precedence. The programmatic `Target` constructor retains its legacy `*` default, so extension authors should always set scopes explicitly. Required-check names must refer to configured checks. Checks are argv arrays executed without a shell; `{python}` selects the interpreter. The owner controls executable commands and trusted skills.
 
 ## Event ingestion, attention and routing
 
@@ -45,21 +45,21 @@ Attention priorities are critical 100, high 80, normal 50 and low 10; star obser
 
 ## Scheduler and persistent state
 
-A process lock prevents multiple schedulers from owning the same database. A thread pool runs independent targets concurrently. A SQLite partial unique index restricts a target to one active task in `running`, `waiting_approval`, or `ready`. Approval blocks subsequent work for that target. Scheduling considers ready resumptions first, then queued priority descending and ID order; running tasks are not preempted.
+A process lock prevents multiple schedulers from owning the same database. A thread pool runs independent targets concurrently. A SQLite partial unique index restricts a target to one active task in `running`, `waiting_approval`, or `ready`. Approval blocks subsequent work for that target. Scheduling considers ready resumptions first, then priority with age-based promotion and ID order; running tasks are not preempted.
 
-A task moves from `queued` to `running`. An approval action persists its plan/cursor and enters `waiting_approval`; approval makes it `ready` for resumption. Rejection and execution terminate in the appropriate recorded outcome. Terminal statuses include `completed`, `drafted`, `blocked`, `failed`, and `interrupted`. Startup marks uncertain running work interrupted rather than automatically replaying side effects.
+A task moves from `queued` to `running`. An approval action persists its plan/cursor and enters `waiting_approval`; approval makes it `ready` for resumption. Rejection and execution terminate in the appropriate recorded outcome. Terminal statuses include `completed`, `drafted`, `blocked`, `failed`, `cancelled`, and `interrupted`. Targets can be paused. Cancellation is cooperative between bounded actions. Inspected retries create a new event and plan without replaying an old action cursor. Startup marks uncertain running work interrupted rather than automatically replaying side effects.
 
-SQLite uses WAL, foreign keys, transactions and a 15-second connection timeout. Tables include `targets`, `events`, `work`, `audit`, `schedule_ticks`, and `source_state`. The database stores observed/desired state, plans, action results, approval tokens, cursors, source positions and memory. Filesystem operations and SQLite commits do not form one atomic cross-system transaction.
+SQLite uses WAL, foreign keys, transactions and a 15-second connection timeout. Tables include `targets`, `events`, `work`, `audit`, `schedule_ticks`, `source_state`, `event_keys`, and `model_usage`. Queue/rate limits reject ingestion transactionally; HTTP reports 429. Daily per-target and installation-wide planning-call budgets reserve usage atomically; they are not token or dollar budgets. The database stores observed/desired state, plans, action results, approval tokens, cursors, source positions and memory. Filesystem operations and SQLite commits do not form one atomic cross-system transaction.
 
 ## Planning and policies
 
 An agent implements `plan(target, event, state)`. Plans contain a summary, actions and an outcome: `complete`, `needs_follow_up`, or `blocked`. The legacy deterministic format can omit the outcome and is treated as complete. A follow-up round receives executed action results; the configured round budget bounds investigation.
 
-The Codex provider launches the actual CLI with `-a never exec --ephemeral --sandbox read-only --skip-git-repo-check --cd ... --output-schema ... --output-last-message ... -`, plus an optional model. The registry supplies the JSON schema. Context includes bounded workspace snapshots, owner objective/skills, desired and observed state, memory, the event, current round and prior results. Snapshot budgets are 128,000 bytes total and 32,000 per file; skills are bounded to 64,000 bytes, summaries to 4,000 characters and results to 1 MB. Planner errors do not fall back to the demo provider.
+The Codex provider launches the actual CLI with `-a never exec --ephemeral --sandbox read-only --skip-git-repo-check --cd ... --output-schema ... --output-last-message ... -`, plus an optional model. The registry supplies the JSON schema. Context includes bounded workspace snapshots, owner objective/skills, desired and observed state, memory, the event, current round and prior results. Default serialized snapshot budgets are 128,000 bytes total, 32,000 per file and 1,000 inventory entries, configurable through `context_limits`; skills are bounded to 64,000 bytes, summaries to 4,000 characters and results to 1 MB. Planner errors do not fall back to the demo provider.
 
-Plans propose application tools; the engine independently validates arguments, policy and scopes. `auto` executes. `ask`/`approval` persists a preview and pauses. `draft` retains a proposal without executing that action or later actions; earlier automatically executed actions may already have occurred. `deny` blocks. Approval tokens bind the task ID, planning round, action index and exact arguments with SHA-256. HTTP approval must supply the current token. CLI `decide` selects the current pending action directly.
+Plans propose application tools; the engine independently validates arguments, policy and scopes. `auto` executes. `ask`/`approval` persists a preview and pauses. `draft` retains a proposal without executing that action or later actions; earlier automatically executed actions may already have occurred. `deny` blocks. Approval tokens bind the task ID, planning round, action index, exact arguments, workspace fingerprint, resolved check configuration, sandbox, scopes and owner policy with SHA-256. Changed context requires a fresh review. HTTP approval must supply the current token. CLI `decide` selects the current pending action directly.
 
-The planner's own environment, CLI hooks and plugins remain a separate boundary. Application policy does not attest every action of an externally configured planner.
+Planner environment variables are allowlisted. `planner_env` grants additional named variables and `planner_home` selects a dedicated Codex profile. CLI hooks and plugins remain a separate boundary. Application policy does not attest every action of an externally configured planner.
 
 ## Built-in tools and file safety
 
@@ -71,7 +71,7 @@ The planner's own environment, CLI hooks and plugins remain a separate boundary.
 | `run_check` | Executes a named owner-configured argv with bounded time and output |
 | `note` | Records a bounded memory proposal |
 
-File content is bounded to 256,000 bytes; notes to 8,000 characters. File mutation writes an fsynced temporary file and uses atomic replacement, preserving mode where applicable. Absolute paths, traversal, escaping links and protected paths such as `.git`, `.aws`, `.ssh`, `.codex` and `.env` are rejected. Owner write globs add another constraint. Check execution has a 30-second default bound and captures at most 65,536 bytes of output.
+File content is bounded to 256,000 bytes; notes to 8,000 characters. File mutation writes an fsynced temporary file and uses atomic replacement, preserving mode where applicable. Absolute paths, traversal, escaping links and protected paths such as `.git`, `.aws`, `.ssh`, `.codex` and `.env` are rejected. Owner write globs add another constraint. Check execution has a 30-second bound. Subprocess output is streamed to disk with a 16 MiB limit; exceeding it terminates the command. Diagnostic previews expose at most 65,536 bytes. Retained Git patches use the complete output file. Writes through symlink components are rejected.
 
 ## Git proposal workspaces
 
@@ -80,6 +80,8 @@ The workspace manager snapshots source content into managed Git repositories, ex
 A target's next task starts from its last explicitly accepted proposal, or the initial snapshot when none has been accepted. Completion retains a local commit, branch and patch; the source workspace stays separate. Inspect `opendots proposal ID` and the retained patch, then use `opendots accept ID --commit COMMIT`. The terminal provides `/proposal ID` and `/accept ID COMMIT`. Acceptance binds the exact completed commit, rejects dirty worktrees and stale bases, and waits for active work to finish or be cancelled. Existing `latest_branch` metadata is informational and is not automatically accepted on upgrade. External edits to the original source are imported explicitly with `opendots sync TARGET_ID` while the service is stopped and no task is active. Synchronization creates a new repository generation, clears the accepted base and retains old proposals. It checks that source content stayed stable during the snapshot. Queued tasks start from the refreshed source; proposals from older generations cannot be accepted. Synchronization does not fetch remote changes, merge accepted proposals into the source, push, or publish PRs.
 
 ## Completion evidence and shared memory
+
+Failed check diagnostics are returned to real planners for up to `max_repair_attempts` (default 2), within the total planning-round limit. Deterministic demo plans do not perform model repair. Optional owner-defined `success_conditions` independently evaluate text or JSON values before completion.
 
 `required_checks` closes the unchecked-completion path. If a complete plan omits a required check, the engine appends an audited owner-required action through normal policy and approval handling. The original model plan remains recorded. Persisted plans follow the same rule without resetting action cursors.
 
@@ -95,10 +97,12 @@ Bubblewrap is the default and fails closed when namespaces are unavailable. It u
 
 ## Sources and timers
 
-- **GitHub polling:** reads the latest events page, up to 100 records; uses ETags and server polling intervals and persists state. `bootstrap: observe` records existing history without replay; `replay` ingests the recent response. High-volume gaps can be missed, so polling is not lossless.
-- **JSONL:** persists a byte cursor, processes complete lines, retries an incomplete final line and resets on truncation. Stable upstream IDs support deduplication.
+- **GitHub polling:** reads bounded event pages (100 per page; default maximum five), uses ETags and server polling intervals, persists state and reports detected continuity gaps. `bootstrap: observe` records existing history without replay; `replay` ingests the recent response. High-volume gaps can be missed, so polling is not lossless.
+- **JSONL:** persists a byte cursor and device/inode identity, processes bounded batches, quarantines malformed complete lines, retries an incomplete final line and resets on rotation/truncation. Stable upstream IDs support deduplication.
 - **Timers:** durable IDs bind schedule ID and interval tick. Startup emits the current interval; missed intervals collapse to the current tick rather than backfilling every missed occurrence.
 - **GitHub webhooks:** verify HMAC-SHA256 using `OPENDOTS_GITHUB_WEBHOOK_SECRET`, with the legacy secret name as a compatibility fallback. Delivery/event headers are normalized into the same event stream.
+
+Source polling uses its own worker pool so slow connectors do not block task scheduling. Equivalent GitHub poll/webhook events share semantic deduplication keys when source identity is available. Health includes last success/error and continuity information.
 
 ## HTTP API and dashboard
 
@@ -106,6 +110,13 @@ Bubblewrap is the default and fails closed when namespaces are unavailable. It u
 | --- | --- |
 | `GET /api/health` | Health |
 | `GET /api/state` | Targets, recent work/audit and all-time counts |
+| `GET /api/work` | Search/paginate history with `q`, `before`, `target`, `status`, `limit` |
+| `GET /api/work/{id}` | Task detail and paginated evidence |
+| `GET /api/work/{id}/proposal` | Completed proposal metadata |
+| `POST /api/work/{id}/accept` | Accept the supplied exact commit as the future base |
+| `POST /api/work/{id}/cancel` | Cooperative cancellation |
+| `POST /api/work/{id}/retry` | Fresh replanning after explicit inspection |
+| `POST /api/targets/{id}/pause` | Pause/resume target scheduling |
 | `GET /api/work/{id}/patch` | Completed retained patch, at most 1 MiB |
 | `POST /api/events` | Normalized event ingestion |
 | `POST /api/work/{id}/decision` | Token-bound approval/rejection |
@@ -115,13 +126,15 @@ The threaded HTTP server defaults to loopback. Local mutation routes require JSO
 
 The dashboard polls each second, displays backend labels, target cards, recent workflow, queue and audit, and renders untrusted text using `textContent`. Review disclosures, focus and scroll are maintained across refreshes. State presents bounded recent records alongside all-time counts. The interface is a local control surface, not a multi-user authentication system.
 
+The terminal client uses the same HTTP API. It provides prompt input, live activity, paginated history, exact-action review and exact-commit acceptance. Exiting the client leaves the service running. `opendots service` manages a user systemd unit.
+
 ## Extensions, packaging and compatibility
 
-`AgentRegistry.register` replaces/adds planners. `ToolRegistry.register(name, handler, arg_names)` adds named-string argument tools; custom handlers must implement their own scope and preview rules and remain denied until owner policy grants them. `SourceRegistry.register(kind, factory)` adds adapters that emit normalized envelopes with persisted source state. There is no fixed architectural target/tool/provider count.
+`AgentRegistry.register` replaces/adds planners. `ToolRegistry.register(name, handler, arg_names)` adds named-string argument tools; custom handlers must implement their own scope and preview rules and remain denied until owner policy grants them. `SourceRegistry.register(kind, factory)` adds adapters that emit normalized envelopes with persisted source state. Tools may supply a nested typed schema instead of named-string arguments. Installed entry-point plugins are loaded only when named in the config and execute as trusted application code. There is no fixed architectural target/tool/provider count.
 
-Python 3.11+ and the standard library are sufficient for the application; setuptools 68+ builds the wheel. Git and bubblewrap are external executables. Package data includes dashboard assets. Both `opendots` and `spots` console scripts invoke the canonical CLI. Legacy module aliases resolve to the canonical module objects, including process supervision.
+Python 3.11+ and the standard library are sufficient for the application; setuptools 77+ builds the wheel. Git and bubblewrap are external executables. Package data includes dashboard assets, first-run configuration and fixture workspaces. Both `opendots` and `spots` console scripts invoke the canonical CLI. Legacy module aliases resolve to the canonical module objects, including process supervision.
 
-Docker/Compose and systemd templates provide optional starting points. Compose binds the host port to loopback and persists `.opendots`; no Codex installation or credentials are bundled. Their deployment execution is not part of the current validated results.
+Compose runs as a non-root user, binds the host port to loopback and initializes a persistent named volume; Codex and credentials are not bundled. CI validates container build/startup/restart and health. Offline `backup`, `restore` and `cleanup` commands manage retained runtime data; see [development](DEVELOPMENT.md) for restore paths and retention boundaries.
 
 ## Scope boundaries
 

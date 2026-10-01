@@ -21,6 +21,13 @@ opendots doctor
 opendots serve
 ```
 
+A download-and-run variant is also available:
+
+```bash
+curl -fsSLo install-opendots.sh https://raw.githubusercontent.com/Shashankss1205/OpenDots/main/install.sh
+bash install-opendots.sh
+```
+
 The installer uses an isolated Python environment and does not require sudo. Install
 system prerequisites first (`sudo apt-get install git bubblewrap python3-venv` on
 Ubuntu/Debian with Python 3.11+). Use `--ref COMMIT` when installing remotely to pin
@@ -103,6 +110,6 @@ OPENDOTS_TEST_SANDBOX=trusted-local python3 -m unittest discover -s tests -v
 
 [Implementation](docs/IMPLEMENTATION.md) explains every subsystem and its boundaries. [Validation](docs/VALIDATION.md) records current and historical results. [Development](docs/DEVELOPMENT.md) covers installation, demo runners, and deployment templates.
 
-This V0 retains local proposals. Outbound GitHub publishing, automatic PRs, production multi-user hosting, and automatic synchronization with upstream source changes are outside its implemented scope.
+OpenDots 0.2.0 retains local proposals. Outbound GitHub publishing, automatic PRs, production multi-user hosting, and automatic synchronization with upstream source changes are outside its implemented scope. Explicit source synchronization is available. See the [remaining work](docs/ROADMAP.md) and [contributor guide](CONTRIBUTING.md).
 
 MIT licensed; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
