@@ -222,3 +222,37 @@ class AuditFixTests(unittest.TestCase):
             self.assertFalse(evaluate(target)[0]['passed'])
             (root/'state.json').write_text('{"replicas":2}')
             self.assertTrue(evaluate(target)[0]['passed'])
+
+    def test_terminal_approval_requires_review_and_confirmation(self):
+        from opendots.terminal import Session, safe_text
+        calls=[]
+        class Fake:
+            def request(self,path,body=None):
+                if body is not None: calls.append((path,body));return {}
+                return {'targets':[],'work':[{'id':1,'target_id':'t','status':'waiting_approval','approval_token':'exact',
+                    'plan':{'summary':'Proposed edit','actions':[{'tool':'write_file','args':{}}]},'approval_index':0}],'audit':[]}
+        session=Session(Fake())
+        with self.assertRaisesRegex(ValueError,'Review'):session.submit('/approve 1')
+        session.submit('/review 1');session.submit('/approve 1');self.assertEqual(calls,[])
+        session.submit('approve 1');self.assertEqual(calls[0][1]['approval_token'],'exact')
+        self.assertNotIn('\x1b',safe_text('untrusted\x1b[2J'))
+
+    def test_terminal_client_uses_real_runtime_approval_api(self):
+        import threading
+        from opendots.config import Config
+        from opendots.engine import Engine
+        from opendots.server import make_server
+        from opendots.terminal import Client, Session
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source';source.mkdir()
+            target=Target('t','T','Test',source,({'types':['owner.*']},),{'note':'approval'})
+            engine=Engine(Config((target,),root/'state.db',sandbox='trusted-local'))
+            server=make_server(engine,port=0);thread=threading.Thread(target=server.serve_forever);thread.start()
+            try:
+                session=Session(Client(f'http://127.0.0.1:{server.server_address[1]}'))
+                session.submit('Investigate');engine.drain();session.submit('/review 1')
+                session.submit('/approve 1');session.submit('approve 1')
+                self.assertEqual(engine.drain()['counts'],{'completed':1})
+                self.assertIsNone(session.submit('/quit'))
+                self.assertEqual(session.client.request('/api/health')['status'],'ok')
+            finally:server.shutdown();server.server_close();thread.join()
