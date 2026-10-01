@@ -13,7 +13,9 @@ from .setup import default_config, initialize, diagnose
 def main():
     parser = argparse.ArgumentParser(description="OpenDots local event-driven agent prototype")
     parser.add_argument("--config", type=Path, default=None)
-    commands = parser.add_subparsers(dest="command", required=True)
+    commands = parser.add_subparsers(dest="command")
+    tui = commands.add_parser("tui", help="Open the interactive terminal client")
+    tui.add_argument("--url", default="http://127.0.0.1:8765")
     init = commands.add_parser("init", help="Create first-run configuration")
     init.add_argument("--directory", type=Path)
     init.add_argument("--workspace", type=Path)
@@ -39,6 +41,10 @@ def main():
     decide.add_argument("decision", choices=["approve", "reject"])
     args = parser.parse_args()
     try:
+        if args.command in {None, "tui"}:
+            from .terminal import run
+            run(getattr(args,"url","http://127.0.0.1:8765"))
+            return 0
         if args.command == "init":
             path = initialize(args.directory, args.workspace, args.backend)
             print(f"Created {path}\nNext: opendots --config {path} doctor\nThen: opendots --config {path} serve")

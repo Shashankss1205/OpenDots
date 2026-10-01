@@ -33,6 +33,16 @@ Open **http://127.0.0.1:8765**, click **Run five-event demo**, and review the pr
 
 For disposable fixtures on a host without working namespaces, explicitly set `"sandbox": "trusted-local"` in [the configuration](examples/config.json). This executes checks without process or network isolation. There is no silent fallback.
 
+## Terminal interface
+
+Keep `opendots serve` running, then open another terminal and run `opendots`
+(or `opendots tui --url http://127.0.0.1:8765`). The prompt-first interface has
+`/agents`, `/use ID`, `/reviews`, `/review ID`, `/activity`, `/pause`, `/resume`
+and `/help`. Type a request for a target subscribed to `owner.request`, or use
+`/send TYPE MESSAGE`. Review an action before `/approve ID`; a second explicit
+confirmation is required. `/quit` or Ctrl+D disconnects without stopping agents.
+The browser and terminal use the same runtime state and approval tokens.
+
 ## Use a real agent
 
 Install and authenticate the Codex CLI, then set `"backend": "codex"` in your configuration. OpenDots asks Codex for structured plans and executes permitted actions through its own tool registry. You can configure workers, models, subscriptions, write scopes, required checks, schedules, and providers.
