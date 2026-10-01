@@ -7,13 +7,13 @@ import shutil
 from .tools import bounded_process
 
 
-def git(cwd, *args):
+def git(cwd, *args, output_path=None):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(cwd),
            "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
            "GIT_TERMINAL_PROMPT": "0", "LANG": "C.UTF-8"}
     command = ["git", "-c", f"core.hooksPath={os.devnull}", "-c", "core.fsmonitor=false",
                "-c", "user.name=OpenDots", "-c", "user.email=opendots@localhost", *args]
-    code, output = bounded_process(command, cwd, 30, env=env)
+    code, output = bounded_process(command, cwd, 30, env=env, output_path=output_path)
     if code:
         raise RuntimeError(f"Git operation failed ({args[0]}): {output[:2000]}")
     return output.strip()
@@ -54,14 +54,14 @@ class Workspaces:
 
     def finalize(self, work):
         directory = Path(work["workspace"])
-        patch = git(directory, "diff", "--no-ext-diff", "--no-textconv", "HEAD")
-        # Include newly-created files in a reproducible branch; never push or touch source workspace.
+        # Preserve exact complete patch bytes, including binary changes and final newlines.
         git(directory, "add", "-A")
-        staged = git(directory, "diff", "--cached", "--no-ext-diff", "--no-textconv")
-        if staged:
-            git(directory, "commit", "-m", f"OpenDots task {work['id']}: proposed local changes")
         artifact = self.root / "artifacts" / f"task-{work['id']}.patch"
         artifact.parent.mkdir(parents=True, exist_ok=True)
-        artifact.write_text(staged or patch)
+        git(directory, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff",
+            "--no-textconv", output_path=artifact)
+        changed = artifact.stat().st_size > 0
+        if changed:
+            git(directory, "commit", "-m", f"OpenDots task {work['id']}: proposed local changes")
         return {"branch": work["branch"], "workspace": str(directory), "patch": str(artifact),
-                "changed": bool(staged or patch), "commit": git(directory, "rev-parse", "HEAD")}
+                "changed": changed, "commit": git(directory, "rev-parse", "HEAD")}

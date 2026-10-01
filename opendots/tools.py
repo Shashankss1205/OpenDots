@@ -30,11 +30,11 @@ def confined_path(root: Path, relative: str) -> Path:
     return candidate
 
 
-def bounded_process(command, cwd, timeout, stdin=None, env=None):
+def bounded_process(command, cwd, timeout, stdin=None, env=None, output_path=None):
     # Trusted argv, never shell interpolation. Kill descendants on timeout on POSIX.
     if sys.platform == "linux":
         command = [sys.executable, "-I", "-B", str(Path(__file__).with_name("process_guard.py")), str(os.getpid()), *command]
-    with tempfile.TemporaryFile(mode="w+b") as output:
+    with (open(output_path, "w+b") if output_path else tempfile.TemporaryFile(mode="w+b")) as output:
         process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
                                    stdout=output, stderr=subprocess.STDOUT, start_new_session=os.name == "posix", env=env)
         try:
