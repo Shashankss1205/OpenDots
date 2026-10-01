@@ -142,8 +142,10 @@ class Engine:
                     if mode == "draft":
                         self.store.finish(work, "drafted", "Policy kept the plan as a draft; no action at this cursor was executed")
                         return
-                    if mode in {"approval", "ask"} and work["approved_index"] != index:
-                        self.store.await_approval(work, index, action, self.registry.preview(target, action))
+                    context = self._approval_context(target, action) if mode in {"approval", "ask"} else None
+                    if mode in {"approval", "ask"} and (work["approved_index"] != index
+                            or work.get("approval_context") != context):
+                        self.store.await_approval(work, index, action, self.registry.preview(target, action), context)
                         return
                     result = self.registry.execute(target, action)
                     self.store.action_done(work, index, result, action["tool"])
@@ -167,6 +169,14 @@ class Engine:
             self.store.finish(work, artifact=artifact)
         except Exception as exc:
             self.store.finish(work, "failed", str(exc)[:8000])
+
+    def _approval_context(self, target, action):
+        from .evidence import workspace_fingerprint
+        return json.dumps({"workspace": str(target.workspace.resolve()),
+                           "fingerprint": workspace_fingerprint(target.workspace),
+                           "checks": target.checks, "sandbox": self.registry.sandbox,
+                           "policy": target.policy, "write_paths": target.write_paths,
+                           "required_checks": target.required_checks}, sort_keys=True)
 
     def _passed_checks(self, work, target):
         from .evidence import check_signature, workspace_fingerprint

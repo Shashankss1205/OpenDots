@@ -36,7 +36,7 @@ class Store:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
             columns = {row[1] for row in db.execute("PRAGMA table_info(work)")}
-            for column in ("workspace", "branch", "base_ref"):
+            for column in ("workspace", "branch", "base_ref", "approval_context"):
                 if column not in columns:
                     db.execute(f"ALTER TABLE work ADD COLUMN {column} TEXT")
             if "planning_round" not in columns:
@@ -150,10 +150,10 @@ class Store:
             # Failed/rejected/interrupted tasks cannot publish success claims to
             # memory that later tasks treat as validated target history.
 
-    def await_approval(self, work, index, action, preview):
+    def await_approval(self, work, index, action, preview, context=None):
         with self.connect() as db:
-            db.execute("UPDATE work SET status='waiting_approval',approval_index=?,updated=? WHERE id=?",
-                       (index, time.time(), work["id"]))
+            db.execute("UPDATE work SET status='waiting_approval',approval_index=?,approved_index=NULL,approval_context=?,updated=? WHERE id=?",
+                       (index, context, time.time(), work["id"]))
             self.log(db, "approval_requested", {"index": index, "action": action, "preview": preview},
                      work["target_id"], work["id"])
 
@@ -161,7 +161,8 @@ class Store:
     def approval_token(work):
         plan = json.loads(work["plan"]) if isinstance(work["plan"], str) else work["plan"]
         data = {"id": work["id"], "round": work["planning_round"], "index": work["approval_index"],
-                "action": plan["actions"][work["approval_index"]]}
+                "action": plan["actions"][work["approval_index"]],
+                "context": dict(work).get("approval_context")}
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
     def decide(self, work_id, approved, expected_token=None):
