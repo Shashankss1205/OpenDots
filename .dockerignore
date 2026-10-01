@@ -1,0 +1,8 @@
+.opendots
+__pycache__
+*.pyc
+.git
+.venv
+docs/dashboard.png
+
+.spots

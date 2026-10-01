@@ -1,0 +1,7 @@
+[
+  {"id": "demo-k8s-issue", "type": "github.issue.opened", "source": "demo", "priority": 95, "payload": {"repo": "kubernetes/kubernetes", "title": "Deployment has zero replicas"}},
+  {"id": "demo-react-scout", "type": "timer.scout", "source": "demo", "priority": 60, "payload": {"repo": "facebook/react", "title": "Inspect icon-button accessibility"}},
+  {"id": "demo-k8s-follow-up", "type": "github.discussion.created", "source": "demo", "priority": 40, "payload": {"repo": "kubernetes/kubernetes", "title": "Follow up after deployment validation"}},
+  {"id": "demo-react-star", "type": "github.star", "source": "demo", "priority": 5, "payload": {"repo": "facebook/react", "title": "Low attention signal"}},
+  {"id": "demo-unrelated", "type": "unrelated.news", "source": "demo", "priority": 50, "payload": {"title": "No matching subscription"}}
+]

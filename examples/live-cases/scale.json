@@ -1,0 +1,228 @@
+{
+  "goals": [
+    {
+      "id": "compatibility",
+      "name": "Version compatibility",
+      "objective": "Preserve predictable version comparison and compatibility behavior."
+    },
+    {
+      "id": "cache-reliability",
+      "name": "Cache reliability",
+      "objective": "Keep eviction and expiration behavior correct under application use."
+    },
+    {
+      "id": "cli-behavior",
+      "name": "Command-line correctness",
+      "objective": "Preserve documented command-line input conversion behavior."
+    },
+    {
+      "id": "frontend",
+      "name": "Accessible user interaction",
+      "objective": "Keep rendered controls accessible, form-safe and responsive to user actions."
+    }
+  ],
+  "targets": [
+    {
+      "id": "version-strict",
+      "package": "packaging",
+      "commit": "f58537628042c7f29780b9d33f31597e7fc9d664",
+      "objective": "Repair version ordering regression and preserve equality and ordering semantics.",
+      "policy": "approval",
+      "write_paths": [
+        "src/packaging/version.py"
+      ],
+      "mutations": [
+        [
+          "src/packaging/version.py",
+          "return self._key < other._key",
+          "return self._key <= other._key"
+        ]
+      ],
+      "name": "Packaging \u00b7 Strict ordering",
+      "goal_id": "compatibility"
+    },
+    {
+      "id": "version-inclusive",
+      "package": "packaging",
+      "commit": "f58537628042c7f29780b9d33f31597e7fc9d664",
+      "objective": "Repair version ordering regression and preserve equality and ordering semantics.",
+      "policy": "auto",
+      "write_paths": [
+        "src/packaging/version.py"
+      ],
+      "mutations": [
+        [
+          "src/packaging/version.py",
+          "return self._key <= other._key",
+          "return self._key < other._key"
+        ]
+      ],
+      "name": "Packaging \u00b7 Inclusive ordering",
+      "goal_id": "compatibility"
+    },
+    {
+      "package": "cachetools",
+      "commit": "ca7508fd56103a1b6d6f17c8e93e36c60b44ca25",
+      "objective": "Repair LRU eviction and TTL expiry regressions using actual full-suite results.",
+      "write_paths": [
+        "src/cachetools/__init__.py"
+      ],
+      "mutations": [
+        [
+          "src/cachetools/__init__.py",
+          "\"\"\"Remove and return the `(key, value)` pair least recently used.\"\"\"\n        try:\n            key = next(iter(self.__order))",
+          "\"\"\"Remove and return the `(key, value)` pair least recently used.\"\"\"\n        try:\n            key = next(reversed(self.__order))"
+        ]
+      ],
+      "id": "cache-lru",
+      "policy": "approval",
+      "name": "Cachetools \u00b7 LRU eviction",
+      "goal_id": "cache-reliability"
+    },
+    {
+      "package": "cachetools",
+      "commit": "ca7508fd56103a1b6d6f17c8e93e36c60b44ca25",
+      "objective": "Repair LRU eviction and TTL expiry regressions using actual full-suite results.",
+      "write_paths": [
+        "src/cachetools/__init__.py"
+      ],
+      "mutations": [
+        [
+          "src/cachetools/__init__.py",
+          "return self.timer() < link.expires",
+          "return self.timer() <= link.expires"
+        ]
+      ],
+      "id": "cache-ttl",
+      "policy": "auto",
+      "name": "Cachetools \u00b7 Expiry boundary",
+      "goal_id": "cache-reliability"
+    },
+    {
+      "package": "cachetools",
+      "commit": "ca7508fd56103a1b6d6f17c8e93e36c60b44ca25",
+      "objective": "Repair LRU eviction and TTL expiry regressions using actual full-suite results.",
+      "write_paths": [
+        "src/cachetools/__init__.py"
+      ],
+      "mutations": [
+        [
+          "src/cachetools/__init__.py",
+          "\"\"\"Remove and return the `(key, value)` pair least recently used.\"\"\"\n        try:\n            key = next(iter(self.__order))",
+          "\"\"\"Remove and return the `(key, value)` pair least recently used.\"\"\"\n        try:\n            key = next(reversed(self.__order))"
+        ],
+        [
+          "src/cachetools/__init__.py",
+          "return self.timer() < link.expires",
+          "return self.timer() <= link.expires"
+        ]
+      ],
+      "id": "cache-combined",
+      "policy": "approval",
+      "name": "Cachetools \u00b7 Combined repair",
+      "goal_id": "cache-reliability"
+    },
+    {
+      "id": "cli-range",
+      "package": "click",
+      "commit": "934813e4d421071a1b3db3973c02fe2721359a6e",
+      "objective": "Repair integer range clamping behavior for open upper and lower bounds.",
+      "policy": "auto",
+      "write_paths": [
+        "src/click/types.py"
+      ],
+      "mutations": [
+        [
+          "src/click/types.py",
+          "return bound + dir",
+          "return bound - dir"
+        ]
+      ],
+      "name": "Click \u00b7 Open range clamping",
+      "goal_id": "cli-behavior"
+    },
+    {
+      "id": "cli-choice",
+      "package": "click",
+      "commit": "934813e4d421071a1b3db3973c02fe2721359a6e",
+      "objective": "Restore documented case-sensitive and case-insensitive Choice normalization.",
+      "policy": "approval",
+      "write_paths": [
+        "src/click/types.py"
+      ],
+      "mutations": [
+        [
+          "src/click/types.py",
+          "if not self.case_sensitive:",
+          "if self.case_sensitive:"
+        ]
+      ],
+      "name": "Click \u00b7 Case-insensitive choices",
+      "goal_id": "cli-behavior",
+      "stale_once": true
+    },
+    {
+      "package": "react",
+      "objective": "Verify the Search button with actual React client/server rendering, accessible name, type, decorative SVG and callback.",
+      "write_paths": [
+        "src/SearchButton.jsx"
+      ],
+      "id": "react-scout",
+      "name": "React \u00b7 Proactive accessibility",
+      "goal_id": "frontend",
+      "policy": "approval",
+      "trigger": "schedule",
+      "mutations": [
+        [
+          "src/SearchButton.jsx",
+          "<button type=\"button\" aria-label=\"Search\"",
+          "<button"
+        ]
+      ]
+    },
+    {
+      "package": "react",
+      "objective": "Verify the Search button with actual React client/server rendering, accessible name, type, decorative SVG and callback.",
+      "write_paths": [
+        "src/SearchButton.jsx"
+      ],
+      "id": "react-draft",
+      "name": "React \u00b7 Draft policy control",
+      "goal_id": "frontend",
+      "policy": "draft",
+      "mutations": [
+        [
+          "src/SearchButton.jsx",
+          "<svg aria-hidden=\"true\">",
+          "<svg>"
+        ]
+      ]
+    },
+    {
+      "package": "react",
+      "objective": "Verify the Search button with actual React client/server rendering, accessible name, type, decorative SVG and callback.",
+      "write_paths": [
+        "src/SearchButton.jsx"
+      ],
+      "id": "react-reject",
+      "name": "React \u00b7 Rejection control",
+      "goal_id": "frontend",
+      "policy": "approval",
+      "decision": "reject",
+      "mutations": [
+        [
+          "src/SearchButton.jsx",
+          " type=\"button\"",
+          ""
+        ]
+      ]
+    }
+  ],
+  "workers": 5,
+  "initial_followups": 3,
+  "concurrent_followups": 2,
+  "delivery_copies": 3,
+  "low_attention_per_target": 20,
+  "unrouted_events": 20,
+  "max_review_cycles": 20
+}

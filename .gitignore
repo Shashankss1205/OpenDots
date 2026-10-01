@@ -1,0 +1,24 @@
+.opendots/
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+build/
+dist/
+examples/*.local.json
+
+.spots/
+
+# Generated acceptance output and local secrets
+.env
+.env.*
+*.log
+*.sqlite*
+*.db
+output/
+docs/demos/
+docs/showcase/
+docs/live-testing/
+docs/scale-testing/
+docs/recovery-testing/
+docs/branding-testing/

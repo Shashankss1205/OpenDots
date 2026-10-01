@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenDots local event-driven agent runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/absolute/path/to/opendots
+ExecStart=/usr/bin/python3 -m opendots --config /absolute/path/to/opendots/examples/config.json serve
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=240
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+[Install]
+WantedBy=default.target
