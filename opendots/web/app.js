@@ -161,12 +161,17 @@ function renderListeners(data){
   if(root.dataset.key===key)return;
   const opened=new Set(Array.from(root.querySelectorAll('details[open]')).map(n=>n.dataset.id));
   root.dataset.key=key;root.replaceChildren();
+  renderPlugins(data.plugins||[]);
   for(const input of data.inputs){root.append(el('p','input-summary',input.kind==='http'?`Local HTTP / terminal / web: ${input.endpoint}`:`GitHub webhook: ${input.configured?'signing secret configured':'not configured'} (${input.endpoint})`));}
   if(!data.sources.length)root.append(el('p','muted','No polling sources configured.'));
-  for(const source of data.sources){const card=el('article','listener-card');card.append(el('h3',null,`${source.id} · ${source.kind}`),el('p',null,source.path||source.repo||'Custom adapter'),el('p','muted',`Every ${source.interval_seconds||5}s · ${source.health.last_error|| (source.health.last_success?'Last success '+new Date(source.health.last_success*1000).toLocaleString():'Not polled yet')}`));if(source.health.gap_message)card.append(el('p',null,source.health.gap_message));root.append(card);}
+  for(const source of data.sources){const card=el('article','listener-card');const mode=source.mode==='listener'?'Persistent listener':`Poll every ${source.interval_seconds||5}s`;card.append(el('h3',null,`${source.id} · ${source.kind}`),el('p',null,source.path||source.repo||'Custom adapter'),el('p','muted',`${source.plugin||'application'} · ${mode} · ${source.health.last_error||source.health.status|| (source.health.last_success?'Last success '+new Date(source.health.last_success*1000).toLocaleString():'Not polled yet')}`));if(source.health.gap_message)card.append(el('p',null,source.health.gap_message));root.append(card);}
   for(const timer of data.schedules)root.append(el('p','input-summary',`Timer ${timer.id}: ${timer.type} every ${timer.interval_seconds}s for ${timer.target_id}`));
   if(!data.schedules.length)root.append(el('p','muted','No heartbeat schedules configured.'));
   for(const target of data.targets){const card=el('details','listener-card');card.dataset.id=target.id;card.open=opened.has(target.id);card.append(el('summary',null,`${target.id} · ${target.subscriptions.length} subscription rule(s) · relevance ${target.relevance.mode||'off'}`),el('p',null,target.goal));const list=el('ul');for(const rule of target.subscriptions)list.append(el('li',null,`Types: ${rule.types.join(', ')} | Sources: ${(rule.sources||[]).join(', ')||'any'} | Repositories: ${(rule.repos||[]).join(', ')||'any'}`));card.append(list,el('p','muted',`Minimum priority: ${target.minimum_priority}. Model confidence threshold: ${target.relevance.mode==='model'?(target.relevance.minimum_confidence??0.7):'disabled'}.`));root.append(card);}
+}
+function renderPlugins(plugins){
+  const root=$('plugin-list');root.replaceChildren();
+  for(const plugin of plugins){const card=el('article','listener-card');card.append(el('h3',null,`${plugin.id} · ${plugin.version}`),el('p',null,plugin.description),el('p','muted',`${plugin.origin} · API ${plugin.api_version}${plugin.legacy?' · legacy compatibility':''}`));for(const [kind,names] of Object.entries(plugin.capabilities)){if(names.length)card.append(el('p',null,`${kind}: ${names.join(', ')}`));}root.append(card);}
 }
 function renderEventStream(data){
   if(!data)return;

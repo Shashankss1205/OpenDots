@@ -50,6 +50,8 @@ def make_server(engine, host="127.0.0.1", port=8765):
             route = urlparse(self.path).path
             if route == "/api/listeners":
                 self.send(200, engine.listeners())
+            elif route == "/api/plugins":
+                self.send(200, engine.plugins.snapshot())
             elif route == "/api/events" or route.startswith("/api/events/"):
                 try:
                     query = parse_qs(urlparse(self.path).query)

@@ -15,7 +15,10 @@ This document describes the code shipped in OpenDots 0.2.0. OpenDots is an indep
 | `opendots/evidence.py` | Workspace fingerprints and check-configuration signatures |
 | `opendots/process_guard.py` | Linux worker-death supervision and command-group cleanup |
 | `opendots/sandbox.py` | Bubblewrap isolation, mounts, environment and resource limits |
-| `opendots/sources.py` | Source registry, GitHub polling, JSONL cursors and timer events |
+| `opendots/plugins.py` | Versioned plugin loading, staged registration, ownership and public inventory |
+| `opendots/builtin_plugins.py` | Built-in providers, tools and source registrations |
+| `opendots/sources.py` | Polling and persistent listener supervision, cursors and health |
+| `opendots/connectors/` | GitHub normalization/polling and JSONL inbox implementations |
 | `opendots/server.py` | Local HTTP API, webhook authentication and static dashboard |
 | `opendots/__main__.py` | CLI commands and error reporting |
 | `opendots/__init__.py` | Version metadata |
@@ -134,7 +137,7 @@ The terminal client uses the same HTTP API. It provides prompt input, live activ
 
 ## Extensions, packaging and compatibility
 
-`AgentRegistry.register` replaces/adds planners. `ToolRegistry.register(name, handler, arg_names)` adds named-string argument tools; custom handlers must implement their own scope and preview rules and remain denied until owner policy grants them. `SourceRegistry.register(kind, factory)` adds adapters that emit normalized envelopes with persisted source state. Tools may supply a nested typed schema instead of named-string arguments. Installed entry-point plugins are loaded only when named in the config and execute as trusted application code. There is no fixed architectural target/tool/provider count.
+`AgentRegistry.register` adds planners; existing names cannot be replaced. `ToolRegistry.register(name, handler, arg_names)` adds named-string argument tools; custom handlers must implement their own scope and preview rules and remain denied until owner policy grants them. `SourceRegistry.register(kind, factory)` adds adapters that emit normalized envelopes with persisted source state. Tools may supply a nested typed schema instead of named-string arguments. Installed entry-point plugins are loaded only when named in the config and execute as trusted application code. There is no fixed architectural target/tool/provider count.
 
 Python 3.11+ and the standard library are sufficient for the application; setuptools 77+ builds the wheel. Git and bubblewrap are external executables. Package data includes dashboard assets, first-run configuration and fixture workspaces. Both `opendots` and `spots` console scripts invoke the canonical CLI. Legacy module aliases resolve to the canonical module objects, including process supervision.
 
@@ -143,3 +146,22 @@ Compose runs as a non-root user, binds the host port to loopback and initializes
 ## Scope boundaries
 
 Implemented tools handle local files, checks and notes. There are no built-in authenticated outbound GitHub/Slack/email actions, arbitrary browser/MCP execution or automatic PR publication. The GitHub connector used to publish this repository is a development workflow, not an OpenDots runtime feature. Production hosting, multi-day soak behavior, lossless ingestion, arbitrary side-effect atomicity and automatic upstream synchronization are not claimed. See [validation](VALIDATION.md) for evidence and prerequisites.
+
+
+## Shared plugin lifecycle
+
+See [PLUGINS.md](PLUGINS.md) for the public contract and migration guide.
+Engine initialization builds empty registries, loads built-in manifests, discovers
+only enabled installed entry points, validates options, stages registrations and
+validates configured source kinds. Constructors and inventory do not start
+connections. The scheduler starts persistent source listeners only after its
+caller acquires the existing process lock; a `finally` block stops sources even
+if scheduling fails. Listener threads are independent of the polling pool.
+
+Each listener emits through the same `Engine.ingest` path as HTTP and polling.
+Its cursor is stored under `source_state.cursor`, separately from public health.
+A failed emit must not be acknowledged upstream. Reconnect recreates the adapter
+with its saved cursor, and stable delivery IDs deduplicate replay. Sources are
+closed cooperatively; a new Engine is required to start them again. Plugin
+inventory omits config values and runtime cursor state. There is no database
+schema migration for the plugin framework.

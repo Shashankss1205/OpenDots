@@ -15,6 +15,7 @@ HELP = '''/agents                 List agents and their status
 /reject ID              Reject a reviewed action
 /activity               Recent activity for the selected agent
 /listeners              Configured sources, schedules and subscriptions
+/plugins                Loaded plugins, versions and capabilities
 /events [TEXT]          Browse received events, including ignored ones
 /events-next            Older events for the same search
 /event ID               Full event payload and goal-relevance decisions
@@ -125,14 +126,22 @@ class Session:
                 "Webhooks: /api/webhooks/github needs a signing secret and an external receiver for localhost.\n"
                 "Timers: configure schedules and a timer.heartbeat subscription. Restart after config edits.\n"
                 "Use /listeners to see exact rules. Guide: https://github.com/Shashankss1205/OpenDots/blob/main/docs/EVENTS.md")
+        if command == '/plugins':
+            data = self.client.request('/api/plugins')
+            lines = ['PLUGINS (loaded capabilities; connections appear in /listeners)']
+            for plugin in data['plugins']:
+                capabilities = '; '.join(kind + ': ' + ', '.join(names) for kind, names in plugin['capabilities'].items() if names)
+                lines.append(f"{plugin['id']} | {plugin['version']} | API {plugin['api_version']} | {plugin['origin']} | {capabilities or 'no capabilities'}")
+            return '\n'.join(lines)
         if command == '/listeners':
             data=self.client.request('/api/listeners')
             lines=['LISTENERS (configuration in effect; restart after edits)']
             for source in data['sources']:
                 health=source.get('health',{})
-                status=health.get('last_error') or ('polled successfully' if health.get('last_success') else 'not polled yet')
-                lines.append(f"{source['id']} | {source['kind']} | {source.get('path') or source.get('repo','')} | {source.get('interval_seconds',5)}s | {status}")
-            if not data['sources']: lines.append('No polling sources configured.')
+                status=health.get('last_error') or health.get('status') or ('polled successfully' if health.get('last_success') else 'not polled yet')
+                mode = 'persistent listener' if source.get('mode') == 'listener' else f"poll every {source.get('interval_seconds',5)}s"
+                lines.append(f"{source['id']} | {source['kind']} | {source.get('plugin','application')} | {mode} | {source.get('path') or source.get('repo','')} | {status}")
+            if not data['sources']: lines.append('No event sources configured.')
             for schedule in data['schedules']:
                 lines.append(f"Timer {schedule['id']}: {schedule['type']} every {schedule['interval_seconds']}s -> {schedule['target_id']}")
             for target in data['targets']:

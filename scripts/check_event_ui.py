@@ -30,6 +30,8 @@ try:
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_address[1]}')
             expect(page.locator('#received-list')).to_contain_text('90%')
+            expect(page.locator('#plugin-list')).to_contain_text('builtin.github')
+            expect(page.locator('#plugin-list')).to_contain_text('github_poll')
             assert page.locator('#sample').is_hidden(), 'Demo must be hidden in normal runtime'
             page.locator('#listener-list details summary').click()
             page.get_by_text('Types: input.*', exact=False).wait_for()

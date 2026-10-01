@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 
-from .agents import AgentRegistry, CodexAgent, ClaudeAgent, DemoAgent, validate_plan
+from .agents import AgentRegistry, DemoAgent, validate_plan
 from .store import Store, BudgetExceeded
 from .tools import ToolRegistry, CheckFailed
 from .workspaces import Workspaces
@@ -53,21 +53,20 @@ class Engine:
         self.store.event_rate_limit = config.max_events_per_minute
         self.store.aging_seconds = config.priority_aging_seconds
         self.store.register_targets(config.targets)
-        self.registry = registry or ToolRegistry(config.sandbox)
-        self.agents = agents or AgentRegistry()
-        if not agents:
-            self.agents.register("demo", DemoAgent())
-            self.agents.register("codex", CodexAgent(config.codex_command, config.model, config.agent_timeout, self.registry, config.context_limits, config.planner_env, config.planner_home))
-            self.agents.register("claude", ClaudeAgent(config.claude_command, config.model, config.agent_timeout, self.registry, config.context_limits, config.planner_env, config.claude_home))
+        self.registry = registry if registry is not None else ToolRegistry(config.sandbox, builtins=False)
+        self.agents = agents if agents is not None else AgentRegistry()
         self.agent = agent
         database_key = hashlib.sha256(config.database.name.encode()).hexdigest()[:16]
         self.workspaces = Workspaces(config.database.parent / "workspaces" / database_key, self.store)
         from .sources import SourceRegistry
-        self.sources = SourceRegistry(config.sources, self.store)
+        self.sources = SourceRegistry(config.sources, self.store, builtins=False)
         self.sources.workers = config.source_workers
-        if config.plugins:
-            from .extensions import ExtensionAPI, load_extensions
-            load_extensions(config.plugins, ExtensionAPI(self.agents, self.registry, self.sources))
+        from .plugins import PluginManager
+        from .builtin_plugins import load_builtins
+        self.plugins = PluginManager(self.agents, self.registry, self.sources)
+        load_builtins(self.plugins, config, local_tools=registry is None, providers=agents is None)
+        self.plugins.load_installed(config.plugins, config.plugin_config)
+        self.sources.validate_configs()
         if agent is None:
             for target in config.targets:
                 self.agents.get(target.agent or config.backend)
@@ -382,6 +381,13 @@ class Engine:
 
     def worker_loop(self):
         """Caller owns the process lock; one shared loop for service and CLI workers."""
+        try:
+            self.sources.start_listeners(self.ingest, stop_event=self.stop_event)
+            self._worker_loop()
+        finally:
+            self.sources.close()
+
+    def _worker_loop(self):
         with ThreadPoolExecutor(max_workers=self.config.workers) as pool:
             running = set()
             while not self.stop_event.is_set():
@@ -419,10 +425,14 @@ class Engine:
         for item in self.config.sources:
             public={key:item[key] for key in ("id","kind","path","repo","interval_seconds","bootstrap") if key in item}
             state=states.get(item["id"],{})
-            public["health"]={key:state[key] for key in ("last_success","last_error","next_poll","last_event_count","gap_message") if key in state}
+            public["mode"] = self.sources.modes[item["kind"]]
+            public["plugin"] = self.plugins.owners["sources"].get(item["kind"], "application")
+            public["health"]={key:state[key] for key in ("last_success","last_error","next_poll","last_event_count","gap_message","status","last_received","consecutive_failures") if key in state}
+            if public["mode"] == "listener" and item["id"] not in self.sources.listeners:
+                public["health"]["status"] = "not_running"
             sources.append(public)
         return {"sources": sources, "schedules": list(self.config.schedules),
-                "available_adapters": list(self.sources.factories),
+                "available_adapters": list(self.sources.factories), "plugins": self.plugins.snapshot()["plugins"],
                 "inputs": [{"kind":"http", "endpoint":"/api/events", "description":"Local HTTP, terminal and web event creation"},
                            {"kind":"github_webhook", "endpoint":"/api/webhooks/github", "configured":bool(os.environ.get("OPENDOTS_GITHUB_WEBHOOK_SECRET") or os.environ.get("SPOTS_GITHUB_WEBHOOK_SECRET"))}],
                 "targets": [{"id":t.id,"goal":t.objective,"subscriptions":list(t.subscriptions),
