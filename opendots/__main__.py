@@ -7,12 +7,18 @@ import uuid
 from .config import load_config
 from .engine import Engine
 from .server import serve
+from .setup import default_config, initialize, diagnose
 
 
 def main():
     parser = argparse.ArgumentParser(description="OpenDots local event-driven agent prototype")
-    parser.add_argument("--config", type=Path, default=Path("examples/config.json"))
+    parser.add_argument("--config", type=Path, default=None)
     commands = parser.add_subparsers(dest="command", required=True)
+    init = commands.add_parser("init", help="Create first-run configuration")
+    init.add_argument("--directory", type=Path)
+    init.add_argument("--workspace", type=Path)
+    init.add_argument("--backend", choices=["demo", "codex"], default="demo")
+    commands.add_parser("doctor", help="Check configuration, dependencies and sandbox")
     run = commands.add_parser("serve", help="Run workers and the local dashboard")
     run.add_argument("--port", type=int, default=8765)
     run.add_argument("--host", choices=["127.0.0.1", "0.0.0.0"], default="127.0.0.1")
@@ -27,6 +33,15 @@ def main():
     decide.add_argument("decision", choices=["approve", "reject"])
     args = parser.parse_args()
     try:
+        if args.command == "init":
+            path = initialize(args.directory, args.workspace, args.backend)
+            print(f"Created {path}\nNext: opendots --config {path} doctor\nThen: opendots --config {path} serve")
+            return 0
+        args.config = args.config or default_config()
+        if args.command == "doctor":
+            result = diagnose(args.config)
+            print(json.dumps(result, indent=2))
+            return 0 if result["ok"] else 1
         engine = Engine(load_config(args.config))
         if args.command == "serve":
             serve(engine, args.host, args.port)

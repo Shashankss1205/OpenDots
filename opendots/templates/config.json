@@ -1,0 +1,157 @@
+{
+  "database": "../.opendots/state.db",
+  "backend": "demo",
+  "workers": 4,
+  "targets": [
+    {
+      "id": "kubernetes",
+      "name": "Kubernetes \u00b7 Reactive maintainer",
+      "objective": "Investigate deployment reports and propose a tested change in the local fixture.",
+      "workspace": "workspaces/kubernetes",
+      "subscriptions": [
+        {
+          "types": [
+            "github.issue.*",
+            "github.discussion.*"
+          ],
+          "repos": [
+            "kubernetes/kubernetes"
+          ]
+        }
+      ],
+      "minimum_priority": 20,
+      "policy": {
+        "read_file": "auto",
+        "write_file": "approval",
+        "run_check": "auto",
+        "note": "auto",
+        "replace_text": "approval"
+      },
+      "checks": {
+        "deployment": [
+          "{python}",
+          "check.py"
+        ]
+      },
+      "recipes": {
+        "github.issue.opened": {
+          "summary": "Propose two replicas for the local deployment fixture, then run its configuration check.",
+          "actions": [
+            {
+              "tool": "read_file",
+              "args": {
+                "path": "deployment.json"
+              }
+            },
+            {
+              "tool": "write_file",
+              "args": {
+                "path": "deployment.json",
+                "content": "{\n  \"kind\": \"Deployment\",\n  \"metadata\": {\"name\": \"demo-service\"},\n  \"spec\": {\"replicas\": 2, \"image\": \"demo-service:local\"}\n}\n",
+                "expected_sha256": "computed by demo backend"
+              }
+            },
+            {
+              "tool": "run_check",
+              "args": {
+                "name": "deployment"
+              }
+            },
+            {
+              "tool": "note",
+              "args": {
+                "text": "Local deployment fixture now has two replicas; configured validation passed. No cluster was contacted."
+              }
+            }
+          ]
+        }
+      },
+      "skills": [
+        "MAINTAINER.md"
+      ],
+      "desired_state": {
+        "deployment_replicas_minimum": 1,
+        "deliverable": "tested local branch and patch"
+      },
+      "write_paths": [
+        "deployment.json"
+      ]
+    },
+    {
+      "id": "react",
+      "name": "React \u00b7 Proactive Scout",
+      "objective": "Periodically inspect a local component fixture and propose a checkable accessibility improvement.",
+      "workspace": "workspaces/react",
+      "subscriptions": [
+        {
+          "types": [
+            "timer.scout",
+            "github.star"
+          ],
+          "repos": [
+            "facebook/react"
+          ]
+        }
+      ],
+      "minimum_priority": 20,
+      "policy": {
+        "read_file": "auto",
+        "write_file": "approval",
+        "run_check": "auto",
+        "note": "auto",
+        "replace_text": "approval"
+      },
+      "checks": {
+        "accessibility": [
+          "{python}",
+          "check.py"
+        ]
+      },
+      "recipes": {
+        "timer.scout": {
+          "summary": "Add an accessible name to the icon button in the local React-style fixture, then validate it.",
+          "actions": [
+            {
+              "tool": "read_file",
+              "args": {
+                "path": "src/SearchButton.jsx"
+              }
+            },
+            {
+              "tool": "write_file",
+              "args": {
+                "path": "src/SearchButton.jsx",
+                "content": "export function SearchButton() {\n  return <button type=\"button\" aria-label=\"Search\"><svg aria-hidden=\"true\" /></button>;\n}\n",
+                "expected_sha256": "computed by demo backend"
+              }
+            },
+            {
+              "tool": "run_check",
+              "args": {
+                "name": "accessibility"
+              }
+            },
+            {
+              "tool": "note",
+              "args": {
+                "text": "Local component fixture has a Search accessible label; its narrow static check passed. No upstream repository was modified."
+              }
+            }
+          ]
+        }
+      },
+      "skills": [
+        "SCOUT.md"
+      ],
+      "desired_state": {
+        "icon_buttons_have_accessible_names": true,
+        "deliverable": "tested local branch and patch"
+      },
+      "write_paths": [
+        "src/*.jsx"
+      ]
+    }
+  ],
+  "schedules": [],
+  "sandbox": "bubblewrap"
+}
