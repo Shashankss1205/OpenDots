@@ -158,7 +158,16 @@ def validate_config(raw):
 
 def load_config(path: Path) -> Config:
     path = path.resolve()
-    raw = json.loads(path.read_text())
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        raise ValueError(
+            f'Configuration not found: {path}\n'
+            'Create one with opendots init --workspace PATH --goal "Your goal", '
+            'then use --config to select the created file. '
+            'See opendots init --help for setup options.'
+        ) from None
+    raw = json.loads(text)
     validate_config(raw)
     base = path.parent
     targets = []

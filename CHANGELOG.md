@@ -1,3 +1,10 @@
+# Unreleased
+
+- Missing configurations explain how to initialize OpenDots without creating state.
+- CLI help describes status, pause, resume, cancel and approval decisions.
+- Development fixture commands select their configuration explicitly.
+- Planner snapshots reserve a source-file inventory before adding file contents.
+
 # OpenDots 0.2.1
 
 This release brings the redesigned browser dashboard to PyPI.
