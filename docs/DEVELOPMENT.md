@@ -18,18 +18,24 @@ Use separate disposable configurations/databases for acceptance runs. Independen
 ## CLI and fixtures
 
 ```bash
-python3 -m opendots ingest examples/five-events.json
-python3 -m opendots drain
-python3 -m opendots status
-python3 -m opendots decide 1 approve
-python3 -m opendots decide 2 approve
-python3 -m opendots drain
+python3 -m opendots --config examples/config.json ingest examples/five-events.json
+python3 -m opendots --config examples/config.json drain
+python3 -m opendots --config examples/config.json status
+python3 -m opendots --config examples/config.json decide 1 approve
+python3 -m opendots --config examples/config.json decide 2 approve
+python3 -m opendots --config examples/config.json drain
 python3 scripts/demo_kubernetes.py
 python3 scripts/demo_react.py
 python3 scripts/demo.py combined --approve-fixture-actions
 ```
 
 The numbered approvals assume a fresh database. Initially, the five-event fixture has two reviews, one queued follow-up, a cheap star observation and an unrelated event. Approvals execute actual fixture actions/checks. Demo runners explicitly authorize their supplied local fixture actions. Kubernetes/React fixture names do not imply upstream clones or a real cluster.
+
+Commands that need a configuration report its missing path and point to
+`opendots init --workspace PATH --goal "Your goal"` when no configuration exists.
+Use `--config` to select the file printed by `init`, or initialize the default
+configuration directory. A failed command does not initialize runtime state.
+Malformed configuration and missing-workspace errors retain their own messages.
 
 ## Runner catalog
 
