@@ -4,6 +4,7 @@
 - CLI help describes status, pause, resume, cancel and approval decisions.
 - Development fixture commands select their configuration explicitly.
 - Planner snapshots reserve a source-file inventory before adding file contents.
+- Terminal reviews summarize file reads, check verdicts and plugin results while retaining the full audit evidence.
 
 # OpenDots 0.2.1
 

@@ -61,6 +61,38 @@ def safe_text(value):
     return ''.join(c if c in '\n\t' or c.isprintable() else '?' for c in str(value))
 
 
+def evidence_line(entry):
+    """Summarize audit results without expanding file contents or plugin payloads."""
+    detail = entry['detail']
+    tool = detail.get('tool') or 'action'
+    result = detail.get('result', {})
+    status = 'failed' if entry['kind'] == 'action_failed' else 'completed'
+
+    def compact(value):
+        text = ' '.join(safe_text(value).split())
+        return text[:240] + ('…' if len(text) > 240 else '')
+
+    summary = 'result recorded'
+    if isinstance(result, dict):
+        if tool == 'read_file' and isinstance(result.get('content'), str):
+            summary = f"{compact(result.get('path', 'file'))} · {len(result['content'].encode())} bytes"
+            if result.get('sha256'): summary += ' · SHA-256 ' + compact(result['sha256'])
+        elif 'exit_code' in result:
+            verdict = 'passed' if result['exit_code'] == 0 else 'failed'
+            summary = f"{compact(result.get('name', 'check'))}: {verdict} (exit {result['exit_code']})"
+            if result.get('output'): summary += ' · ' + compact(result['output'])
+        elif result.get('error'):
+            summary = compact(result['error'])
+        elif result.get('path'):
+            summary = compact(result['path'])
+            if 'bytes' in result: summary += ' · ' + compact(result['bytes']) + ' bytes'
+        elif result.get('note'):
+            summary = compact(result['note'])
+    else:
+        summary = compact(result)
+    return f"  {compact(tool)} · {status} · {summary}"
+
+
 class Client:
     def __init__(self, url='http://127.0.0.1:8765'):
         parsed=urlparse(url)
@@ -236,8 +268,8 @@ class Session:
                 self.reviewed[work_id]=work['approval_token']
                 preview=next((a['detail'].get('preview') for a in self.state['audit'] if a['work_id']==work_id and a['kind']=='approval_requested'),None)
                 action=work['plan']['actions'][work['approval_index']]
-                evidence=[a['detail'] for a in self.state['audit'] if a['work_id']==work_id and a['kind'] in {'action_completed','action_failed'}]
-                return f"Review #{work_id} — {work['target_id']}\nWhy: {work['plan']['summary']}\nAction: {action['tool']}\n"+(preview.get('diff') if isinstance(preview,dict) and preview.get('diff') else json.dumps(preview or action['args'],indent=2))+'\nEvidence: '+json.dumps(evidence,indent=2)+f'\n/approve {work_id} or /reject {work_id}'
+                evidence=[evidence_line(a) for a in reversed(self.state['audit']) if a['work_id']==work_id and a['kind'] in {'action_completed','action_failed'}]
+                return f"Review #{work_id} — {work['target_id']}\nWhy: {work['plan']['summary']}\nAction: {action['tool']}\n"+(preview.get('diff') if isinstance(preview,dict) and preview.get('diff') else json.dumps(preview or action['args'],indent=2))+'\nEvidence:\n'+('\n'.join(evidence) or '  No earlier action results in the recent activity window.')+f'\n/approve {work_id} or /reject {work_id}'
             if self.reviewed.get(work_id)!=work['approval_token']:
                 raise ValueError(f'Review the current action first: /review {work_id}')
             if command=='/approve':

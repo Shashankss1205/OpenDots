@@ -145,7 +145,7 @@ Then type a normal message about your goal. It becomes an `owner.request` event 
 | `/status` | Show the provider, source health, and model usage. |
 | `/activity` | See what is happening. |
 | `/reviews` | Find work waiting for approval. |
-| `/review ID` | Inspect the action for the task number shown. |
+| `/review ID` | Inspect the action and diff first, followed by compact read and check evidence. |
 | `/approve ID` | Request approval; type the requested confirmation to permit that exact action. |
 | `/work ID` | Inspect task results and check evidence. |
 | `/proposal ID` | Inspect a completed patch and its acceptance command. |
