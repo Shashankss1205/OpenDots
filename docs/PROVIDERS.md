@@ -101,6 +101,21 @@ The compatible adapter sends `max_tokens` and structured `response_format`;
 servers must support that dialect. Compatibility is not a claim that every
 server or model implements these options.
 
+A concrete hosted example is [LivePair](https://livepairai.com), which serves
+chat completions on `https://livepairai.com/v1/agent` behind prepaid `lp_…`
+keys (`LIVEPAIR_API_KEY` below). Its catalog mixes labs, so pick an explicit
+model id from `GET /v1/agent/models`. The endpoint does not implement
+`response_format`, so declare `"structured_output": "json_object"`: the schema
+then travels in the prompt and local validation still applies.
+
+```json
+{"id": "livepair", "kind": "openai_compatible",
+ "model": "deepseek/deepseek-v4.1-flash",
+ "base_url": "https://livepairai.com/v1/agent",
+ "api_key_env": "LIVEPAIR_API_KEY",
+ "structured_output": "json_object"}
+```
+
 For local inference, install Ollama and make your chosen model available first:
 
 ```bash
