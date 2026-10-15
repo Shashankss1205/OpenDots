@@ -199,6 +199,9 @@ class SourceRegistry:
         with self.store.connect() as db:
             row = db.execute("SELECT state FROM source_state WHERE id=?", (source_id,)).fetchone()
         state = json.loads(row[0]) if row else {}
+        # Older versions persisted batch diagnostics alongside their audit rows.
+        # They are already acknowledged, not new input for the next poll.
+        state.pop("rejected", None)
         if (state.get("next_poll") or 0) > now:
             return
         started=time.monotonic()
@@ -218,13 +221,14 @@ class SourceRegistry:
                         raise
                     with self.store.connect() as db:
                         self.store.log(db, "source_record_rejected", {"source":source_id,"event":event,"error":str(exc)[:1000]})
+            rejected = next_state.pop("rejected", [])
             next_state.update(last_success=now,last_error=None,consecutive_failures=0,
                               last_event_count=len(events),duration_seconds=time.monotonic()-started)
             next_state["next_poll"] = now + max(1, int(next_state.get("poll_interval", config.get("interval_seconds", 5))))
             with self.store.connect() as db:
                 db.execute("INSERT INTO source_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state",
                            (source_id, json.dumps(next_state)))
-                for record in next_state.pop("rejected", []):
+                for record in rejected:
                     self.store.log(db, "source_record_rejected", {"source":source_id, **record})
                 if next_state.get("gap_detected_at") != state.get("gap_detected_at"):
                     self.store.log(db,"source_gap_detected",{"source":source_id,"message":next_state.get("gap_message")})
