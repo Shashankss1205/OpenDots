@@ -18,8 +18,10 @@ class JSONLSource:
         stat = self.path.stat()
         identity = [stat.st_dev, stat.st_ino]
         size = stat.st_size
+        generation = int(state.get("generation", 0))
         if size < offset or (state.get("identity") and state["identity"] != identity):
             offset = 0
+            generation += 1
         events = []
         rejected = []
         batch_size = max(1, int(self.config.get("batch_size", 1000)))
@@ -50,8 +52,11 @@ class JSONLSource:
                     rejected.append({"offset":start,"sha256":hashlib.sha256(line).hexdigest(),"error":str(exc)[:300]})
                     offset = handle.tell()
                     continue
-                event.setdefault("id", "jsonl:" + self.config["id"] + ":" + str(start) + ":" + hashlib.sha256(line).hexdigest())
+                # Keep legacy IDs until a detected reset. A deterministic file
+                # generation separates new occurrences without changing retry IDs.
+                key = line if not generation else json.dumps([identity, generation]).encode() + b"\n" + line
+                event.setdefault("id", "jsonl:" + self.config["id"] + ":" + str(start) + ":" + hashlib.sha256(key).hexdigest())
                 event.setdefault("source", "file")
                 events.append(event)
                 offset = handle.tell()
-        return events, {**state, "offset": offset, "identity": identity, "rejected": rejected}
+        return events, {**state, "offset": offset, "identity": identity, "generation": generation, "rejected": rejected}
