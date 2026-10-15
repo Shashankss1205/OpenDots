@@ -107,6 +107,15 @@ Each poll commits malformed-record diagnostics together with its cursor. An audi
 write failure leaves that cursor retryable. A temporarily missing inbox preserves
 its cursor and audit history without replaying previously recorded rejections.
 
+For records without a producer ID, detected replacement or shrinkage starts a
+new file generation, so identical lines at reused offsets remain distinct
+occurrences. IDs stay stable during retries and restarts within a generation;
+producer-supplied IDs keep their original deduplication meaning. An inbox that
+has not rotated keeps the earlier generated-ID format across upgrades.
+Rotation detection compares file identity and size with the acknowledged cursor.
+Use producer IDs when truncation and regrowth may happen between polls, or when
+the same upstream delivery can appear in multiple files.
+
 The generated `input.*`/`file` subscription already matches. If you choose different types, add a rule to the target's `subscriptions`:
 
 ```json

@@ -9,6 +9,7 @@
 - Terminal reviews summarize file reads, check verdicts and plugin results while retaining the full audit evidence.
 - Goal overviews show only accepted events for the selected goal; rejected and unassessed events remain available in event history.
 - JSONL rejection diagnostics are recorded once with their acknowledged cursor and remain retryable if the audit write fails.
+- Detected JSONL rotation and truncation separate implicit event IDs across file generations while preserving retry and explicit-ID deduplication.
 
 # OpenDots 0.2.1
 
