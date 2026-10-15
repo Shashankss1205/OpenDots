@@ -103,6 +103,10 @@ printf '%s\n' '{"id":"your-unique-delivery-id","type":"input.build_failed","sour
 
 Use the same path in both places, creating its parent directory first. JSONL defaults a missing source to `file`. Its cursor survives restarts. Incomplete lines wait for completion; malformed complete records are audited and skipped. Keep inbox/data files outside the source-code directory.
 
+Each poll commits malformed-record diagnostics together with its cursor. An audit
+write failure leaves that cursor retryable. A temporarily missing inbox preserves
+its cursor and audit history without replaying previously recorded rejections.
+
 The generated `input.*`/`file` subscription already matches. If you choose different types, add a rule to the target's `subscriptions`:
 
 ```json
