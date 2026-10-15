@@ -134,6 +134,12 @@ source cursors retry. `priority_aging_seconds` (default 60) raises waiting work
 priority over time to avoid starvation. Pause/resume and cancel are available in
 the CLI/API; cancellation of running work occurs between bounded actions.
 
+Heartbeats also defer when capacity is exhausted, leaving their schedule tick
+unacknowledged while workers and other schedules continue. Scheduling checks the
+current interval: when pressure spans several intervals, the next accepted
+heartbeat represents the current interval. Accepted ticks remain restart-safe
+and deduplicated.
+
 ## Write scope defaults
 
 Omitted `write_paths` in file configuration now permits no writes. Broad access

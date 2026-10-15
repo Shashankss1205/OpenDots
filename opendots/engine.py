@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 
 from .agents import AgentRegistry, DemoAgent, validate_plan
-from .store import Store, BudgetExceeded
+from .store import Store, BudgetExceeded, CapacityError
 from .tools import ToolRegistry, CheckFailed
 from .workspaces import Workspaces
 
@@ -383,7 +383,12 @@ class Engine:
             # Ingest first; deterministic ID makes crash between ingestion and tick persistence safe.
             event = {"id": f"schedule:{schedule['id']}:{tick}", "type": schedule["type"], "source": "timer",
                      "target_id": schedule["target_id"], "payload": schedule.get("payload", {})}
-            self.ingest(event)
+            try:
+                self.ingest(event)
+            except CapacityError:
+                # Leave this tick unacknowledged and let workers free capacity.
+                # Other targets' schedules must still get a chance to run.
+                continue
             with self.store.connect() as db:
                 db.execute("INSERT INTO schedule_ticks VALUES(?,?) ON CONFLICT(id) DO UPDATE SET last_tick=excluded.last_tick",
                            (schedule["id"], tick))
