@@ -4,11 +4,14 @@ Start `opendots serve` after configuring your own workspace and goal, then open
 http://127.0.0.1:8765. The browser and terminal share the same runtime state.
 
 The **Goal in focus** selector switches between configured agents. The overview
-shows the selected agent's recent matching event, recent activity and next action
+shows the selected agent's latest accepted event, recent activity and next action
 awaiting approval. The full agent, event, review and activity sections remain
 available below, followed by event sources, models, plugins and notifications.
 The overview uses the runtime's bounded recent event stream; search the full
 event history if an older event is no longer visible there.
+Events appear in the overview after model relevance accepts them, or when they
+pass subscription and priority rules with semantic relevance disabled. Pending,
+rejected, uncertain and failed assessments remain visible in **Received events**.
 
 A review shows the proposed action and its exact preview. Green and red diff
 lines mark additions and removals. **Approve action** approves only that action,
@@ -39,11 +42,14 @@ python -m pip install playwright
 python -m playwright install chromium
 python scripts/check_event_ui.py
 python scripts/check_dashboard_ui.py
+python scripts/check_goal_relevance_ui.py
 ```
 
 The second check creates disposable fixture workspaces and uses explicitly
 trusted local checks. It exercises selection, token-bound approvals, rejection,
 retained patches, escaping, mobile width, disconnection/recovery and empty state.
+The third checks accepted-event selection using persisted relevance decisions,
+including blocked assessments, independent goals and rules-only targets.
 No live provider or external account is used. To capture screenshots:
 
 ```bash
