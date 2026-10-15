@@ -148,6 +148,13 @@ requires an explicit `"*"`. `protected_paths` defaults to check.py, tests/** and
 protected. Owners can customize protected paths, and should include every local
 validation harness they rely on as independent evidence.
 
+Scope and protection patterns match normalized workspace-relative paths. A leading
+`./`, repeated separators or interior `.` components refer to the same protected
+file. The runtime also normalizes configured scope patterns and skill paths for
+matching while preserving exact action arguments for review and approval.
+Skill paths name literal files; their resolved in-workspace files are protected
+as well, including filenames containing glob characters and symlinked skills.
+
 ## Planner environment boundary
 
 The planner receives only PATH, HOME, locale/temp platform variables and names

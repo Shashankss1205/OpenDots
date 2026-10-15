@@ -1,5 +1,6 @@
 # Unreleased
 
+- Equivalent relative path spellings share write-scope and protected-input checks, preventing aliases from replacing owner validation or instructions.
 - Heartbeats defer under queue or event-rate pressure so workers and other schedules can continue.
 - Missing configurations explain how to initialize OpenDots without creating state.
 - CLI help describes status, pause, resume, cancel and approval decisions.

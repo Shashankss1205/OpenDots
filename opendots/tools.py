@@ -151,15 +151,19 @@ class ToolRegistry:
         if tool in {"read_file", "write_file", "replace_text"}:
             confined_path(target.workspace, args["path"])
         if tool in {"write_file", "replace_text"}:
-            protected = (*target.protected_paths, *target.skills)
-            if any(fnmatch.fnmatchcase(args["path"], pattern) for pattern in protected):
+            relative = Path(args["path"]).as_posix()
+            # Skills name literal files, including names with glob characters.
+            skills = {Path(skill).as_posix() for skill in target.skills}
+            skills.update(confined_path(target.workspace, skill).relative_to(target.workspace.resolve()).as_posix()
+                          for skill in target.skills)
+            if relative in skills or any(fnmatch.fnmatchcase(relative, Path(pattern).as_posix()) for pattern in target.protected_paths):
                 raise ValueError("Write path is outside allowed scope: protected owner validation or instruction input")
             current = target.workspace
             for part in Path(args["path"]).parts:
                 current = current / part
                 if current.is_symlink():
                     raise ValueError("Writes through symlinks are not allowed")
-        if tool in {"write_file", "replace_text"} and not any(fnmatch.fnmatchcase(args["path"], pattern) for pattern in target.write_paths):
+        if tool in {"write_file", "replace_text"} and not any(fnmatch.fnmatchcase(relative, Path(pattern).as_posix()) for pattern in target.write_paths):
             raise ValueError("Write path is outside the owner-configured scope")
         if tool == "write_file" and len(args["content"].encode()) > 256_000:
             raise ValueError("Proposed file exceeds the V0 size limit")
