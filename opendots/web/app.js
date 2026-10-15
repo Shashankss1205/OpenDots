@@ -241,7 +241,9 @@ function renderFocus(data) {
   $('goal-meta').textContent = target ? `${target.name || target.id} · ${target.state.paused ? 'Paused' : 'Configured agent'} · ${target.state.completed || 0} completed` : 'Run opendots init with your project and goal, then start the runtime.';
   const jobs = data.work.filter(w => w.target_id === selectedGoal);
   const waiting = jobs.find(w => w.status === 'waiting_approval');
-  const recentEvent = data.event_stream?.events.find(e => e.decisions.some(d => d.target_id === selectedGoal && d.status !== 'filtered'));
+  // Only accepted signals belong in the overview; all decisions remain in history.
+  const recentEvent = data.event_stream?.events.find(e => e.decisions.some(d =>
+    d.target_id === selectedGoal && (d.status === 'relevant' || d.status === 'disabled')));
   const activity = data.audit.filter(a => a.target_id === selectedGoal && a.kind !== 'target_configuration_changed').slice(0, 3);
   const key = JSON.stringify([selectedGoal, recentEvent, activity, waiting?.approval_token, target?.state.paused, jobs[0]?.status, jobs[0]?.summary, jobs[0]?.error]);
   if ($('focus').dataset.key === key) return;

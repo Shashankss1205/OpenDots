@@ -5,6 +5,7 @@
 - Development fixture commands select their configuration explicitly.
 - Planner snapshots reserve a source-file inventory before adding file contents.
 - Terminal reviews summarize file reads, check verdicts and plugin results while retaining the full audit evidence.
+- Goal overviews show only accepted events for the selected goal; rejected and unassessed events remain available in event history.
 
 # OpenDots 0.2.1
 

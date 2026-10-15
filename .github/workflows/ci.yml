@@ -87,3 +87,4 @@ jobs:
         run: |
           python scripts/check_event_ui.py
           python scripts/check_dashboard_ui.py
+          python scripts/check_goal_relevance_ui.py
